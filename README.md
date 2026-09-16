@@ -1,4 +1,4 @@
-<img src="docs/logo.png" width="96" align="right" alt="Nota" />
+<img src="docs/logo.png" width="96" alt="Nota" />
 
 # Nota
 
