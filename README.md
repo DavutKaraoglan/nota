@@ -1,3 +1,5 @@
+<img src="docs/logo.png" width="96" align="right" alt="Nota" />
+
 # Nota
 
 An Android music player for the audio already on the phone, with a Discover tab for everything
