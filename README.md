@@ -54,14 +54,19 @@ succeeds with them — only the Discover tab stays silent:
 
 | file | comes from | holds |
 | --- | --- | --- |
-| `src/com/nota/data/Backend.java` | `tools/Backend.java.template` | helper address, shared secret |
+| `src/com/nota/data/Backend.java` | `tools/Backend.java.template`, or `tools/gen_backend.py` | helper address, shared secret |
 | `res/xml/network_security_config.xml` | `tools/network_security_config.xml.template` | the address the certificate is pinned to |
 | `res/raw/notastream.pem` | generated throwaway certificate | the helper's certificate |
 
-To run your own helper, point all three at it. Requests are signed with HMAC-SHA256 over
-`v=<id>&e=<expiry>` and expire after twelve hours, and the helper caps requests and extractions
-per address per hour. The secret ships inside the APK, so it is not a credential: it means that
-knowing the address is not enough, and that both ends can be given a new one.
+To run your own helper, point all three at it — `./tools/gen_backend.py https://host:8443 <secret>`
+writes the first one. Requests are signed with HMAC-SHA256 over `v=<id>&e=<expiry>` and expire
+after twelve hours, and the helper caps requests and extractions per address per hour.
+
+The secret ships inside the APK, so it is not a credential. It is stored XOR-ed against a random
+key rather than as a string, which keeps it out of `strings` over the build but not out of the
+hands of anyone who reads the code; what it really buys is that knowing the address is not
+enough, and that both ends can be handed a new one. The address itself cannot be hidden at all:
+the certificate is pinned to it, and a pin is plain text in the resources.
 
 Everything the app speaks to is over TLS. The helper has no domain and no public authority will
 issue for a bare IP, so its certificate is self-signed and pinned as the only trust anchor for

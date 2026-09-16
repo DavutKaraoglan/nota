@@ -4,19 +4,37 @@ package com.nota.data;
  * The stream helper this build talks to. Kept out of the repository: the address and the
  * shared secret belong to one deployment, and published they are a free proxy for anyone.
  *
- * <p>Build a copy from {@code tools/Backend.java.template}.
+ * <p>The example build.sh copies in when the real file is missing. Replace it with
+ * {@code ./tools/gen_backend.py https://your-host:8443 <secret>}.
  */
 final class Backend {
     private Backend() {
     }
 
-    /** Base address of the notastream helper, no trailing slash. */
+    /**
+     * Base address of the notastream helper, no trailing slash. Not hidden, because it
+     * cannot be: the certificate is pinned to this address, and a pin is a plain string in
+     * the resources that the framework reads before any of this code runs.
+     */
     static final String HOST = "https://example.invalid:8443";
 
     /**
-     * Shared with the helper. It ships inside the APK, so it is not a real credential: it
-     * only means that reading the source is no longer enough to drive the helper, and that
-     * both ends can be given a new one the day somebody unpacks a build.
+     * Shared with the helper. It ships inside the APK, so it is not a real credential: a
+     * reader who unpacks the build can have it. Keeping it out of the string pool only
+     * means that scraping it is no longer a one-line job, and both ends can be handed a new
+     * one the day it shows up somewhere.
      */
-    static final String SECRET = "set-me";
+    static String secret() {
+        char[] out = new char[BODY.length];
+        for (int i = 0; i < BODY.length; i++) {
+            out[i] = (char) (BODY[i] ^ KEY[i % KEY.length]);
+        }
+        return new String(out);
+    }
+
+    private static final int[] KEY = {1};
+
+    private static final int[] BODY = {
+            114, 100, 117, 44, 108, 100
+    };
 }

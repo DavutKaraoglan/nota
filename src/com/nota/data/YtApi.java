@@ -56,7 +56,7 @@ public class YtApi {
         try {
             javax.crypto.Mac mac = javax.crypto.Mac.getInstance("HmacSHA256");
             mac.init(new javax.crypto.spec.SecretKeySpec(
-                    Backend.SECRET.getBytes("UTF-8"), "HmacSHA256"));
+                    Backend.secret().getBytes("UTF-8"), "HmacSHA256"));
             byte[] sum = mac.doFinal(query.getBytes("UTF-8"));
             char[] hex = new char[sum.length * 2];
             for (int i = 0; i < sum.length; i++) {
