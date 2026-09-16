@@ -4,6 +4,10 @@ An Android music player for the audio already on the phone, with a Discover tab 
 else. No Gradle, no AndroidX, no third-party libraries: the app is plain Java against the
 framework, built by a shell script that drives `aapt2`, `javac`, `d8` and `apksigner` by hand.
 
+| Home | Now playing |
+| --- | --- |
+| ![Home](docs/home.jpg) | ![Now playing](docs/player.jpg) |
+
 ## What it does
 
 - **Library** — tracks, albums, artists and folders from MediaStore, with a background service,
