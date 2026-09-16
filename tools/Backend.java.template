@@ -1,0 +1,22 @@
+package com.nota.data;
+
+/**
+ * The stream helper this build talks to. Kept out of the repository: the address and the
+ * shared secret belong to one deployment, and published they are a free proxy for anyone.
+ *
+ * <p>Build a copy from {@code tools/Backend.java.template}.
+ */
+final class Backend {
+    private Backend() {
+    }
+
+    /** Base address of the notastream helper, no trailing slash. */
+    static final String HOST = "https://example.invalid:8443";
+
+    /**
+     * Shared with the helper. It ships inside the APK, so it is not a real credential: it
+     * only means that reading the source is no longer enough to drive the helper, and that
+     * both ends can be given a new one the day somebody unpacks a build.
+     */
+    static final String SECRET = "set-me";
+}

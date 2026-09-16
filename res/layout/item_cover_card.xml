@@ -1,0 +1,39 @@
+<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="@dimen/card"
+    android:layout_height="wrap_content"
+    android:orientation="vertical"
+    android:layout_marginEnd="12dp"
+    android:paddingBottom="4dp"
+    android:background="?android:attr/selectableItemBackground">
+
+    <ImageView
+        android:id="@+id/art"
+        android:layout_width="@dimen/card"
+        android:layout_height="@dimen/card"
+        android:background="@drawable/bg_art"
+        android:scaleType="centerCrop"
+        android:padding="42dp"
+        android:src="@drawable/ic_note"
+        android:contentDescription="@string/content_album_art" />
+
+    <TextView
+        android:id="@+id/title"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="8dp"
+        android:singleLine="true"
+        android:ellipsize="end"
+        android:textSize="@dimen/text_title"
+        android:textColor="@color/text_primary" />
+
+    <TextView
+        android:id="@+id/subtitle"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="1dp"
+        android:singleLine="true"
+        android:ellipsize="end"
+        android:textSize="@dimen/text_sub"
+        android:textColor="@color/text_secondary" />
+</LinearLayout>

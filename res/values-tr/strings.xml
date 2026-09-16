@@ -1,0 +1,159 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">Nota</string>
+
+    <!-- Sekmeler -->
+    <string name="tab_home">Ana sayfa</string>
+    <string name="tab_library">Kitaplık</string>
+    <string name="tab_playlists">Listeler</string>
+    <string name="tab_settings">Ayarlar</string>
+
+    <!-- Kitaplık alt sekmeleri -->
+    <string name="lib_songs">Şarkılar</string>
+    <string name="lib_albums">Albümler</string>
+    <string name="lib_artists">Sanatçılar</string>
+    <string name="lib_folders">Klasörler</string>
+
+    <!-- İzin -->
+    <string name="perm_title">Müziğine erişim</string>
+    <string name="perm_body">Nota\'nın kitaplığını oluşturabilmesi için bu cihazdaki ses dosyalarını okuma izni gerekiyor.</string>
+    <string name="perm_grant">İzin ver</string>
+    <string name="perm_denied_body">İzin reddedildi. Sistem ayarlarından açabilirsin.</string>
+    <string name="perm_open_settings">Ayarları aç</string>
+
+    <!-- Boş durumlar -->
+    <string name="empty_songs">Bu cihazda müzik bulunamadı</string>
+    <string name="empty_albums">Albüm bulunamadı</string>
+    <string name="empty_artists">Sanatçı bulunamadı</string>
+    <string name="empty_folders">Klasör bulunamadı</string>
+    <string name="empty_search">Aramanla eşleşen bir şey yok</string>
+    <string name="loading">Yükleniyor…</string>
+    <string name="rescan">Kitaplığı yeniden tara</string>
+    <string name="scanning">Taranıyor…</string>
+
+    <!-- Sayılar -->
+    <string name="n_songs">%1$d şarkı</string>
+    <string name="one_song">1 şarkı</string>
+    <string name="n_albums">%1$d albüm</string>
+    <string name="one_album">1 albüm</string>
+    <string name="unknown_artist">Bilinmeyen sanatçı</string>
+    <string name="unknown_album">Bilinmeyen albüm</string>
+
+    <!-- Çalar -->
+    <string name="play">Çal</string>
+    <string name="pause">Duraklat</string>
+    <string name="next">Sonraki</string>
+    <string name="previous">Önceki</string>
+    <string name="shuffle">Karıştır</string>
+    <string name="shuffle_all">Tümünü karıştır</string>
+    <string name="repeat_off">Tekrar kapalı</string>
+    <string name="repeat_all">Tümünü tekrarla</string>
+    <string name="repeat_one">Şarkıyı tekrarla</string>
+    <string name="now_playing">Şimdi çalıyor</string>
+    <string name="queue">Sıra</string>
+    <string name="lyrics">Sözler</string>
+    <string name="equalizer">Ekolayzer</string>
+    <string name="close">Kapat</string>
+    <string name="stop">Durdur</string>
+
+    <!-- Eylemler -->
+    <string name="play_next">Sıradaki olarak çal</string>
+    <string name="add_to_queue">Sıraya ekle</string>
+    <string name="add_to_playlist">Çalma listesine ekle</string>
+    <string name="favorite_add">Favorilere ekle</string>
+    <string name="favorite_remove">Favorilerden çıkar</string>
+    <string name="go_to_album">Albüme git</string>
+    <string name="go_to_artist">Sanatçıya git</string>
+    <string name="share">Paylaş</string>
+    <string name="track_info">Şarkı bilgisi</string>
+    <string name="delete">Sil</string>
+    <string name="search">Ara</string>
+    <string name="search_hint">Şarkı, albüm, sanatçı</string>
+    <string name="sort_by">Sıralama</string>
+    <string name="cancel">Vazgeç</string>
+    <string name="ok">Tamam</string>
+
+    <string name="content_album_art">Albüm kapağı</string>
+
+    <!-- Bildirim -->
+    <string name="channel_playback">Çalma</string>
+
+    <!-- Çalma listeleri -->
+    <string name="new_playlist">Yeni çalma listesi</string>
+    <string name="playlist_name">Liste adı</string>
+    <string name="create">Oluştur</string>
+    <string name="rename">Yeniden adlandır</string>
+    <string name="empty_playlists">Henüz çalma listen yok</string>
+    <string name="favorites">Favoriler</string>
+    <string name="recently_played">Son çalınanlar</string>
+    <string name="most_played">En çok çalınanlar</string>
+    <string name="on_repeat">Tekrar tekrar dinlediklerin</string>
+    <string name="added_to_playlist">%1$s listesine eklendi</string>
+    <string name="queued">Sıraya eklendi</string>
+    <string name="queued_next">Sıradaki olarak eklendi</string>
+    <string name="delete_playlist_q">“%1$s” silinsin mi?</string>
+    <string name="remove">Çıkar</string>
+    <string name="play_all">Tümünü çal</string>
+    <string name="empty_favorites">Henüz favorin yok</string>
+    <string name="empty_history">Henüz bir şey çalmadın</string>
+
+    <!-- Sıralama -->
+    <string name="sort_title">Başlık</string>
+    <string name="sort_artist">Sanatçı</string>
+    <string name="sort_album">Albüm</string>
+    <string name="sort_added">Yeni eklenen</string>
+    <string name="sort_duration">Süre</string>
+
+    <string name="retry">Tekrar dene</string>
+
+    <!-- Ayarlar -->
+    <string name="theme">Tema</string>
+    <string name="theme_system">Sistemi izle</string>
+    <string name="theme_light">Açık</string>
+    <string name="theme_dark">Koyu</string>
+    <string name="sleep_timer">Uyku zamanlayıcısı</string>
+    <string name="sleep_off">Kapalı</string>
+    <string name="sleep_minutes">%1$d dakika</string>
+    <string name="sleep_end_of_track">Şarkı bitince</string>
+    <string name="sleep_active">%1$s sonra duracak</string>
+    <string name="clear_history">Dinleme geçmişini temizle</string>
+    <string name="history_cleared">Geçmiş temizlendi</string>
+    <string name="about">Hakkında</string>
+    <string name="about_body">Nota, internetten de müzik arayabilen çevrimdışı bir müzik çalar. Hesap yok, takip yok.</string>
+    <string name="nothing_playing">Çalan bir şey yok</string>
+    <string name="equalizer_preset">Hazır ayar</string>
+    <string name="equalizer_custom">Özel</string>
+    <string name="equalizer_bass">Bas güçlendirme</string>
+    <string name="equalizer_virtual">Çevresel ses</string>
+    <string name="equalizer_loudness">Ses yükseltme</string>
+    <string name="lyrics_missing">Bu parçanın sözleri bulunamadı</string>
+    <string name="lyrics_loading">Sözler aranıyor…</string>
+    <string name="data_saver">İnternet tasarrufu</string>
+    <string name="data_saved_short">%1$s tasarruf</string>
+    <string name="data_used">İndirilen: %1$s</string>
+    <string name="data_saved_detail">Önbellekten gelen: %1$s (%%%2$d)</string>
+    <string name="data_saver_note">Arama sonuçları ve kapak görselleri cihazda saklanır; aynı listeyi tekrar açmak internet harcamaz. Cihazdaki müzikler zaten hiç internet kullanmaz.</string>
+    <string name="data_reset">Sıfırla</string>
+    <string name="crash_title">Nota çöktü</string>
+    <string name="crash_share">Paylaş</string>
+    <string name="tab_discover">Keşfet</string>
+    <string name="discover_hint">YouTube’dan müzik</string>
+    <string name="discover_empty">Sonuç yok</string>
+    <string name="discover_error">Kataloğa ulaşılamadı</string>
+    <string name="recent_searches">Son aramaların</string>
+    <string name="discover_search_hint">Şarkı ya da sanatçı ara</string>
+    <string name="discover_opening">Açılıyor…</string>
+    <string name="discover_no_audio">Bu kayıtta çalınabilir ses yok</string>
+    <string name="home_empty">Burası henüz boş. Birkaç şarkı çal, listeler kendiliğinden dolsun.</string>
+    <string name="taste">Dinleme profili</string>
+    <string name="taste_short">%1$d sinyal</string>
+    <string name="taste_counts">%1$d sinyal, %2$d eşleşme öğrenildi.</string>
+    <string name="for_you">Senin için öneriler</string>
+    <string name="loved_artists">Sevdiğin sanatçılar</string>
+    <string name="copied">Şarkı adı kopyalandı</string>
+    <string name="follow">Abone ol</string>
+    <string name="following">Abone olundu</string>
+    <string name="autoplay">Çalmaya devam et</string>
+    <string name="autoplay_on">Sıra bitince benzer şarkılar gelir</string>
+    <string name="autoplay_off">Kapalı</string>
+</resources>

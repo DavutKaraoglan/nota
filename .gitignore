@@ -1,0 +1,21 @@
+build/
+*.apk
+*.dex
+*.class
+
+# Android platform jar: a Google-licensed binary, fetched locally. See README.
+tools/android*.jar
+
+# Signing material must never be committed; build.sh generates a debug key.
+tools/*.keystore
+*.jks
+*.p12
+
+# One deployment's stream helper: its address, its shared secret and its certificate.
+# build.sh writes example copies of all three from tools/ when they are missing.
+src/com/nota/data/Backend.java
+res/xml/network_security_config.xml
+res/raw/notastream.pem
+
+__pycache__/
+*.pyc

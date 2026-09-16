@@ -1,0 +1,133 @@
+<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:orientation="vertical"
+    android:background="@color/bg">
+
+    <!-- The top bar sits inside the stage so a page tint can run behind it as one gradient. -->
+    <FrameLayout
+        android:layout_width="match_parent"
+        android:layout_height="0dp"
+        android:layout_weight="1">
+
+    <View
+        android:id="@+id/tint"
+        android:layout_width="match_parent"
+        android:layout_height="320dp"
+        android:layout_gravity="top" />
+
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="match_parent"
+        android:orientation="vertical">
+
+            <LinearLayout
+                android:id="@+id/topbar"
+                android:layout_width="match_parent"
+                android:layout_height="@dimen/topbar_height"
+                android:orientation="horizontal"
+                android:gravity="center_vertical"
+                android:paddingStart="4dp"
+                android:paddingEnd="4dp">
+
+                <ImageButton
+                    android:id="@+id/btn_back"
+                    android:layout_width="44dp"
+                    android:layout_height="44dp"
+                    android:visibility="gone"
+                    android:background="?android:attr/selectableItemBackgroundBorderless"
+                    android:src="@drawable/ic_back"
+                    android:scaleType="centerInside"
+                    android:contentDescription="@string/close" />
+
+                <TextView
+                    android:id="@+id/title"
+                    android:layout_width="0dp"
+                    android:layout_height="wrap_content"
+                    android:layout_weight="1"
+                    android:paddingStart="12dp"
+                    android:paddingEnd="8dp"
+                    android:singleLine="true"
+                    android:ellipsize="end"
+                    android:textColor="@color/text_primary"
+                    android:textSize="@dimen/text_header"
+                    android:textStyle="bold"
+                    android:text="@string/app_name" />
+
+                <EditText
+                    android:id="@+id/search_field"
+                    android:layout_width="0dp"
+                    android:layout_height="wrap_content"
+                    android:layout_weight="1"
+                    android:visibility="gone"
+                    android:background="@null"
+                    android:paddingStart="12dp"
+                    android:singleLine="true"
+                    android:imeOptions="actionSearch"
+                    android:inputType="text"
+                    android:textSize="16sp"
+                    android:textColor="@color/text_primary"
+                    android:textColorHint="@color/text_disabled"
+                    android:hint="@string/search_hint" />
+
+                <ImageButton
+                    android:id="@+id/btn_search"
+                    android:layout_width="44dp"
+                    android:layout_height="44dp"
+                    android:background="?android:attr/selectableItemBackgroundBorderless"
+                    android:src="@drawable/ic_search"
+                    android:scaleType="centerInside"
+                    android:contentDescription="@string/search" />
+
+                <ImageButton
+                    android:id="@+id/btn_settings"
+                    android:layout_width="44dp"
+                    android:layout_height="44dp"
+                    android:visibility="gone"
+                    android:background="?android:attr/selectableItemBackgroundBorderless"
+                    android:src="@drawable/ic_settings"
+                    android:scaleType="centerInside"
+                    android:contentDescription="@string/tab_settings" />
+
+                <ImageButton
+                    android:id="@+id/btn_overflow"
+                    android:layout_width="44dp"
+                    android:layout_height="44dp"
+                    android:background="?android:attr/selectableItemBackgroundBorderless"
+                    android:src="@drawable/ic_more"
+                    android:scaleType="centerInside"
+                    android:contentDescription="@string/sort_by" />
+            </LinearLayout>
+
+            <FrameLayout
+                android:id="@+id/content"
+                android:layout_width="match_parent"
+                android:layout_height="0dp"
+                android:layout_weight="1" />
+        </LinearLayout>
+    </FrameLayout>
+
+    <FrameLayout
+        android:id="@+id/mini_holder"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content" />
+
+    <View
+        android:layout_width="match_parent"
+        android:layout_height="1dp"
+        android:background="@color/divider" />
+
+    <LinearLayout
+        android:id="@+id/tabbar"
+        android:layout_width="match_parent"
+        android:layout_height="@dimen/tabbar_height"
+        android:orientation="horizontal"
+        android:background="@color/elevated">
+
+        <include android:id="@+id/tab_home" layout="@layout/item_tab" />
+        <include android:id="@+id/tab_discover" layout="@layout/item_tab" />
+        <include android:id="@+id/tab_library" layout="@layout/item_tab" />
+        <include android:id="@+id/tab_playlists" layout="@layout/item_tab" />
+    </LinearLayout>
+</LinearLayout>

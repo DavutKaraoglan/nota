@@ -1,0 +1,51 @@
+<?xml version="1.0" encoding="utf-8"?>
+<ScrollView xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:fillViewport="true">
+
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:orientation="vertical"
+        android:paddingStart="@dimen/gutter"
+        android:paddingEnd="@dimen/gutter"
+        android:paddingBottom="24dp">
+
+        <Switch
+            android:id="@+id/fx_switch"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:paddingTop="12dp"
+            android:paddingBottom="12dp"
+            android:textSize="@dimen/text_title"
+            android:textColor="@color/text_primary"
+            android:text="@string/equalizer" />
+
+        <TextView
+            android:id="@+id/fx_note"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginBottom="8dp"
+            android:visibility="gone"
+            android:textSize="@dimen/text_sub"
+            android:textColor="@color/text_secondary" />
+
+        <TextView
+            android:id="@+id/fx_preset"
+            style="@style/Chip"
+            android:layout_marginBottom="8dp" />
+
+        <LinearLayout
+            android:id="@+id/fx_bands"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="vertical" />
+
+        <LinearLayout
+            android:id="@+id/fx_extras"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="vertical" />
+    </LinearLayout>
+</ScrollView>
