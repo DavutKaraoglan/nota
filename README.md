@@ -2,60 +2,64 @@
 
 # Nota
 
-An Android music player for the audio already on the phone, with a Discover tab for everything
-else. No Gradle, no AndroidX, no third-party libraries: the app is plain Java against the
-framework, built by a shell script that drives `aapt2`, `javac`, `d8` and `apksigner` by hand.
+A music player for Android. It plays the songs that are already on your phone, and when you
+want something else, it can go and find it. No account to make, no advertisements, no monthly
+fee, and nothing about you is sent anywhere.
 
 | Home | Now playing |
 | --- | --- |
 | ![Home](docs/home.jpg) | ![Now playing](docs/player.jpg) |
 
-## What it does
+## What you get
 
-- **Library** — tracks, albums, artists and folders from MediaStore, with a background service,
-  lock-screen controls and an equalizer.
-- **Lyrics** — a `.lrc` or `.txt` file next to the audio file, otherwise [LRCLIB](https://lrclib.net).
-  Timed lines follow playback; the current one also appears above the title in the player.
-- **Artist info** — the latin reading of a non-latin stage name, the legal name behind an alias
-  and the one-line description [MusicBrainz](https://musicbrainz.org) keeps.
-- **Discover** — searching and playing from YouTube and the Internet Archive.
-- **Data saver** — every network answer is cached on disk with its own freshness window, and the
-  app reports what it spent.
+- **Your own music.** Songs, albums, artists and folders, found by themselves. Controls on the
+  lock screen, an equaliser, a sleep timer, playlists and favourites.
+- **A home screen that learns.** What you play, replay and skip quietly builds up, and the home
+  screen fills with your own shelves: what you have on repeat, compilations around an artist you
+  like, and the newest thing they have out.
+- **Discover.** Search for a song or an artist and play it, without leaving the app.
+- **Lyrics.** Found on their own and scrolling along with the song, in latin letters even when
+  the song is not.
+- **Light on the connection.** Anything fetched once is kept, so opening the same screen again
+  is instant and free. Settings tells you how much was spent and how much was saved.
 
-Interface strings are English and Turkish; code and comments are English.
+The app speaks English and Turkish.
 
-## Next to the usual players
+## Next to the apps you know
 
-|  | Nota | Streaming apps (Spotify, YouTube Music, Apple Music) | Offline players (Poweramp, Musicolet) |
+|  | Nota | Spotify, YouTube Music, Apple Music | Other offline players |
 | --- | --- | --- | --- |
-| Account | none | required | none |
-| Download | 223 KB | tens of megabytes | a few to tens of megabytes |
-| Paid tier, ads | neither | one or both | usually a one-off unlock |
-| Where suggestions come from | this phone | their servers | mostly nowhere |
-| Suggestions with the network off | yes, from what was played | no | — |
-| Analytics, crash reporting | none | several | varies |
-| Permissions | 8, all of them named in one screen of manifest | dozens, plus Play Services | a handful |
+| Account | not needed | required | not needed |
+| Size on your phone | about a quarter of a megabyte | a hundred times that | ten to a hundred times that |
+| Advertisements, subscription | neither | one or both | usually a one-off payment |
+| Where suggestions come from | your own phone | their servers | there usually are none |
+| Suggestions without a connection | yes | no | — |
+| What it knows about you | nothing leaves the phone | what you play, and when | varies |
 
-**Performance.** The difference is what is not there: no Play Services, no analytics SDK, no
-sync on launch, no image or networking library. One dex file starts the app and MediaStore
-fills the library; everything that touches the network is spelled out in `src/com/nota/data`
-and is asked for only when a screen needs it. Every answer is cached on disk with a freshness
-window of its own — six hours for a search, a week for a mix, a month for an artist's banner —
-so opening the same screen twice costs nothing, and the settings screen reports what was spent
-and what came from cache.
+**Why it feels quick.** It is a small app that carries nothing it does not use. It does not
+report to anyone when it opens, and it does not go back for something it already has: a search
+is kept for the rest of the day, a compilation for a week, an artist's picture for a month. So
+the second visit to a screen is instant, and costs nothing on a slow or metered connection.
 
-**Suggestions.** A streaming service recommends from what millions of people played next;
-`Recommender` recommends from what *you* played next. Skips, replays, completions and the pair
-of songs that followed each other are scored on the device, and the one outside opinion it asks
-for is the radio the catalogue builds around a song. That is the honest trade: it will not
-surface a record nobody you resemble has heard, and it will not push what a chart is paid to
-push. Nothing about a listener leaves the phone to make it work.
+**Where the suggestions come from.** The big services suggest what millions of other people
+played next. Nota suggests what *you* played next: it notices which songs you finish, which you
+skip, which you go back to, and which two keep following each other, and it works all of that
+out on the phone. That is an honest trade. It will not hand you a record that nobody like you
+has heard yet — and it will not push something because someone paid for it to be pushed.
 
-**What it is not.** It has no licence to anything. It plays the files on the phone, and for the
-rest it asks public endpoints through a helper you host yourself — so it is not a replacement
-for a subscription, and it cannot hand you a catalogue the way one does.
+**What it is not.** Nota owns no music and licenses none. It plays your files, and for anything
+else it asks the public internet — through a small helper you have to run yourself. So it is not
+a replacement for a subscription, and it cannot hand you a whole catalogue the way one does.
 
-## Building
+---
+
+## For developers
+
+No Gradle, no AndroidX, no third-party libraries: plain Java against the framework, built by a
+shell script that drives `aapt2`, `javac`, `d8` and `apksigner` by hand. Code and comments are
+English; the interface is translated.
+
+### Building
 
 You need a JDK 21, the Android command line tools that Termux packages, and one Google-licensed
 binary the repository cannot carry:
@@ -73,7 +77,7 @@ The script generates a debug keystore on the first run and leaves the signed APK
 ANDROID_JAR=/path/to/android.jar ./build.sh
 ```
 
-## How a YouTube track is fetched
+### How a YouTube track is fetched
 
 A helper does the extraction, because doing it on the phone means driving a hidden `WebView`
 through YouTube's own player to get past its attestation check, and that costs seconds and
@@ -106,3 +110,5 @@ $EDITOR res/xml/network_security_config.xml   # <domain> is the helper's address
 
 MIT, see [LICENSE](LICENSE). Nota is not affiliated with YouTube, MusicBrainz, LRCLIB or the
 Internet Archive; it only asks their public endpoints.
+</content>
+</invoke>
