@@ -19,10 +19,12 @@ import java.text.Collator;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.Comparator;
+import java.util.HashSet;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
+import java.util.Set;
 import java.util.concurrent.CopyOnWriteArrayList;
 
 /** In-memory index of the device's audio files, built from MediaStore. */
@@ -300,16 +302,16 @@ public class MediaLibrary {
     public static List<Track> resolve(Context context, List<String> keys) {
         List<Track> out = new ArrayList<Track>();
         MediaLibrary lib = get();
-        Db db = null;
+        Set<String> onlineIds = new HashSet<String>();
         for (String key : keys) {
-            if (key.startsWith("o:")) {
-                if (db == null) db = Db.get(context);
-                Track t = db.online(key.substring(2));
-                if (t != null) out.add(t);
-            } else {
-                Track t = lib.byKey(key);
-                if (t != null) out.add(t);
-            }
+            if (key.startsWith("o:")) onlineIds.add(key.substring(2));
+        }
+        Map<String, Track> online = onlineIds.isEmpty()
+                ? Collections.<String, Track>emptyMap()
+                : Db.get(context).online(onlineIds);
+        for (String key : keys) {
+            Track t = key.startsWith("o:") ? online.get(key.substring(2)) : lib.byKey(key);
+            if (t != null) out.add(t);
         }
         return out;
     }

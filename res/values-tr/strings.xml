@@ -6,7 +6,23 @@
     <string name="tab_home">Ana sayfa</string>
     <string name="tab_library">Kitaplık</string>
     <string name="tab_playlists">Listeler</string>
+    <string name="tab_history">Geçmiş</string>
     <string name="tab_settings">Ayarlar</string>
+
+    <!-- Ana sayfanın üstündeki duygu şeridi -->
+    <string name="mood_query">müzik</string>
+    <string-array name="mood_names">
+        <item>Enerjik</item>
+        <item>Sakin</item>
+        <item>Mutlu</item>
+        <item>Hüzünlü</item>
+        <item>Romantik</item>
+        <item>Nostaljik</item>
+        <item>Dalgın</item>
+        <item>Melankolik</item>
+        <item>Coşkulu</item>
+        <item>Odaklanmış</item>
+    </string-array>
 
     <!-- Kitaplık alt sekmeleri -->
     <string name="lib_songs">Şarkılar</string>
@@ -80,6 +96,10 @@
 
     <!-- Çalma listeleri -->
     <string name="new_playlist">Yeni çalma listesi</string>
+    <string name="download">İndir</string>
+    <string name="downloading">İndiriliyor…</string>
+    <string name="download_remove">İndirmeyi kaldır</string>
+    <string name="download_removed">İndirme kaldırıldı</string>
     <string name="playlist_name">Liste adı</string>
     <string name="create">Oluştur</string>
     <string name="rename">Yeniden adlandır</string>
@@ -149,6 +169,10 @@
     <string name="taste_short">%1$d sinyal</string>
     <string name="taste_counts">%1$d sinyal, %2$d eşleşme öğrenildi.</string>
     <string name="for_you">Senin için öneriler</string>
+    <string name="mixes_for_you">Senin için derlemeler</string>
+    <string name="new_releases">Yeni çıkanlar</string>
+    <string name="mood_playlists">Çalma listeleri</string>
+    <string name="mix_of">%1$s karışımı</string>
     <string name="loved_artists">Sevdiğin sanatçılar</string>
     <string name="copied">Şarkı adı kopyalandı</string>
     <string name="follow">Abone ol</string>

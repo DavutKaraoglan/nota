@@ -6,17 +6,20 @@ import android.content.DialogInterface;
 import android.content.Intent;
 import android.net.Uri;
 import android.provider.MediaStore;
-import android.view.Menu;
-import android.view.MenuItem;
+import android.view.LayoutInflater;
 import android.view.View;
 import android.widget.EditText;
-import android.widget.PopupMenu;
+import android.widget.ImageView;
+import android.widget.TextView;
 import android.widget.Toast;
 
 import com.nota.R;
+import com.nota.data.ArtLoader;
 import com.nota.data.Db;
+import com.nota.data.Downloads;
 import com.nota.data.MediaLibrary;
 import com.nota.data.Signals;
+import com.nota.data.YtApi;
 import com.nota.model.Album;
 import com.nota.model.Artist;
 import com.nota.model.Track;
@@ -32,73 +35,107 @@ public class TrackMenu {
         void changed();
     }
 
+    private static final int PLAY_NEXT = 1, QUEUE = 2, PLAYLIST = 3, FAV = 4, ALBUM = 5,
+            ARTIST = 6, REMOVE = 7, SHARE = 8, DOWNLOAD = 9, UNDOWNLOAD = 10;
+
     public static void show(final MainActivity host, View anchor, final Track track,
                             final long playlistId, final OnChanged onChanged) {
         final Playback playback = Playback.get(host);
         final Db db = Db.get(host);
         final boolean favorite = db.isFavorite(track.key());
 
-        PopupMenu menu = new PopupMenu(host, anchor);
-        Menu m = menu.getMenu();
-        final int PLAY_NEXT = 1, QUEUE = 2, PLAYLIST = 3, FAV = 4, ALBUM = 5, ARTIST = 6,
-                REMOVE = 7, SHARE = 8;
-        m.add(Menu.NONE, PLAY_NEXT, 0, R.string.play_next);
-        m.add(Menu.NONE, QUEUE, 1, R.string.add_to_queue);
-        if (!track.isRemote()) {
-            m.add(Menu.NONE, PLAYLIST, 2, R.string.add_to_playlist);
-        }
-        m.add(Menu.NONE, FAV, 3, favorite ? R.string.favorite_remove : R.string.favorite_add);
-        if (!track.isRemote() && track.album != null) {
-            m.add(Menu.NONE, ALBUM, 4, R.string.go_to_album);
-        }
-        if (track.artist != null) m.add(Menu.NONE, ARTIST, 5, R.string.go_to_artist);
-        if (!track.isRemote()) m.add(Menu.NONE, SHARE, 6, R.string.share);
-        if (playlistId != 0) m.add(Menu.NONE, REMOVE, 7, R.string.remove);
+        final String videoId = YtApi.isYouTube(track) ? YtApi.videoId(track) : null;
+        final Downloads downloads = Downloads.get(host);
+        final boolean kept = videoId != null && downloads.has(videoId);
 
-        menu.setOnMenuItemClickListener(new PopupMenu.OnMenuItemClickListener() {
-            public boolean onMenuItemClick(MenuItem item) {
-                switch (item.getItemId()) {
+        Sheet sheet = new Sheet(host).header(trackHeader(host, track));
+        sheet.add(PLAY_NEXT, R.drawable.ic_next, R.string.play_next);
+        sheet.add(QUEUE, R.drawable.ic_queue, R.string.add_to_queue);
+        if (!track.isRemote()) sheet.add(PLAYLIST, R.drawable.ic_playlist, R.string.add_to_playlist);
+        sheet.add(FAV, favorite ? R.drawable.ic_favorite : R.drawable.ic_favorite_border,
+                favorite ? R.string.favorite_remove : R.string.favorite_add);
+        if (videoId != null) {
+            if (kept) {
+                sheet.add(UNDOWNLOAD, R.drawable.ic_downloaded, R.string.download_remove);
+            } else if (downloads.running(videoId)) {
+                sheet.add(DOWNLOAD, R.drawable.ic_download, R.string.downloading);
+            } else {
+                sheet.add(DOWNLOAD, R.drawable.ic_download, R.string.download);
+            }
+        }
+        if (!track.isRemote() && track.album != null) {
+            sheet.add(ALBUM, R.drawable.ic_album, R.string.go_to_album);
+        }
+        if (track.artist != null) sheet.add(ARTIST, R.drawable.ic_artist, R.string.go_to_artist);
+        if (!track.isRemote()) sheet.add(SHARE, R.drawable.ic_share, R.string.share);
+        if (playlistId != 0) sheet.add(REMOVE, R.drawable.ic_delete, R.string.remove);
+
+        sheet.show(new Sheet.OnPick() {
+            public void picked(int id) {
+                switch (id) {
                     case PLAY_NEXT:
                         playback.playNext(Collections.singletonList(track));
                         toast(host, R.string.queued_next);
-                        return true;
+                        break;
                     case QUEUE:
                         playback.addToQueue(Collections.singletonList(track));
                         toast(host, R.string.queued);
-                        return true;
+                        break;
                     case PLAYLIST:
                         pickPlaylist(host, Collections.singletonList(track));
-                        return true;
+                        break;
                     case FAV:
                         if (db.toggleFavorite(track)) Signals.get(host).liked(track);
                         if (onChanged != null) onChanged.changed();
-                        return true;
+                        break;
+                    case DOWNLOAD:
+                        // The track has to survive the download, or a song kept from a search
+                        // would have nothing to show once the search is gone.
+                        db.saveOnline(track);
+                        downloads.start(videoId);
+                        toast(host, R.string.downloading);
+                        break;
+                    case UNDOWNLOAD:
+                        downloads.remove(videoId);
+                        toast(host, R.string.download_removed);
+                        break;
                     case ALBUM: {
                         Album a = MediaLibrary.get().album(track.albumId);
                         if (a != null) host.push(TrackListPage.forAlbum(a));
-                        return true;
+                        break;
                     }
                     case ARTIST: {
                         if (track.isRemote()) {
                             host.push(new ArtistPage(track.artist, track));
-                            return true;
+                            break;
                         }
                         Artist a = MediaLibrary.get().artist(track.artistId);
                         if (a != null) host.push(TrackListPage.forArtist(a));
-                        return true;
+                        break;
                     }
                     case SHARE:
                         share(host, track);
-                        return true;
+                        break;
                     case REMOVE:
                         db.removeFromPlaylist(playlistId, track.key());
                         if (onChanged != null) onChanged.changed();
-                        return true;
+                        break;
                 }
-                return false;
             }
         });
-        menu.show();
+    }
+
+    /** Names the song the actions belong to, the way the row that was pressed did. */
+    private static View trackHeader(MainActivity host, Track track) {
+        View v = LayoutInflater.from(host).inflate(R.layout.sheet_track_header, null, false);
+        ImageView art = (ImageView) v.findViewById(R.id.art);
+        Ui.round(art, host.getResources().getDimension(R.dimen.art_radius));
+        ArtLoader.get(host).bind(art, track,
+                host.getResources().getDimensionPixelSize(R.dimen.row_art),
+                R.drawable.ic_note, Ui.dp(host, 14));
+        ((TextView) v.findViewById(R.id.title)).setText(track.title);
+        ((TextView) v.findViewById(R.id.subtitle)).setText(Ui.artistOr(host, track.artist));
+        return v;
     }
 
     /** Hands the file to another app as a MediaStore item, which needs no FileProvider. */

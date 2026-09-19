@@ -9,6 +9,8 @@ import android.content.res.Configuration;
 import android.graphics.drawable.Drawable;
 import android.os.Build;
 import android.os.Bundle;
+import android.os.Handler;
+import android.os.Looper;
 import android.text.Editable;
 import android.text.TextWatcher;
 import android.view.View;
@@ -39,7 +41,7 @@ public class MainActivity extends Activity {
     public static final int TAB_HOME = 0;
     public static final int TAB_DISCOVER = 1;
     public static final int TAB_LIBRARY = 2;
-    public static final int TAB_PLAYLISTS = 3;
+    public static final int TAB_HISTORY = 3;
     private static final int TAB_COUNT = 4;
 
     public static final String EXTRA_OPEN = "open";
@@ -62,6 +64,18 @@ public class MainActivity extends Activity {
     private int currentTab = TAB_HOME;
     private boolean searching;
     private MiniPlayer mini;
+
+    /** Long enough that a word typed at speed asks the network once rather than per letter. */
+    private static final long SEARCH_DEBOUNCE_MS = 300;
+    private final Handler searchHandler = new Handler(Looper.getMainLooper());
+    private final Runnable searchRunnable = new Runnable() {
+        public void run() {
+            // selectTab() stacks the new page before inflating it, and clearing the field
+            // fires the watcher in between; a page with no views yet must not be called.
+            Page p = current();
+            if (p != null && p.root() != null) p.onSearch(searchField.getText().toString());
+        }
+    };
 
     @Override
     protected void attachBaseContext(Context base) {
@@ -95,7 +109,7 @@ public class MainActivity extends Activity {
         setupTab(R.id.tab_home, TAB_HOME, R.drawable.ic_home, R.string.tab_home);
         setupTab(R.id.tab_discover, TAB_DISCOVER, R.drawable.ic_search, R.string.tab_discover);
         setupTab(R.id.tab_library, TAB_LIBRARY, R.drawable.ic_note, R.string.tab_library);
-        setupTab(R.id.tab_playlists, TAB_PLAYLISTS, R.drawable.ic_playlist, R.string.tab_playlists);
+        setupTab(R.id.tab_history, TAB_HISTORY, R.drawable.ic_timer, R.string.tab_history);
 
         btnBack.setOnClickListener(new View.OnClickListener() {
             public void onClick(View v) {
@@ -123,10 +137,8 @@ public class MainActivity extends Activity {
             }
 
             public void onTextChanged(CharSequence s, int a, int b, int c) {
-                // selectTab() stacks the new page before inflating it, and clearing the field
-                // fires this watcher in between; a page with no views yet must not be called.
-                Page p = current();
-                if (p != null && p.root() != null) p.onSearch(s.toString());
+                searchHandler.removeCallbacks(searchRunnable);
+                searchHandler.postDelayed(searchRunnable, SEARCH_DEBOUNCE_MS);
             }
 
             public void afterTextChanged(Editable s) {
@@ -195,8 +207,8 @@ public class MainActivity extends Activity {
                 return new DiscoverPage();
             case TAB_LIBRARY:
                 return new LibraryPage();
-            case TAB_PLAYLISTS:
-                return new PlaylistsPage();
+            case TAB_HISTORY:
+                return new HistoryPage();
             default:
                 return new HomePage();
         }
@@ -303,6 +315,7 @@ public class MainActivity extends Activity {
     }
 
     private void exitSearch() {
+        searchHandler.removeCallbacks(searchRunnable);
         if (searching) {
             Page p = current();
             if (p != null && p.root() != null) p.onSearch("");
@@ -347,7 +360,17 @@ public class MainActivity extends Activity {
     @Override
     protected void onDestroy() {
         super.onDestroy();
+        searchHandler.removeCallbacks(searchRunnable);
         if (mini != null) mini.onDestroy();
+        // Pages listen to playback, and playback outlives the activity, so a page never told to
+        // let go keeps this activity and its whole view tree reachable. A theme change or a
+        // rotation then leaves the old copy running behind the new one. Tab roots are held
+        // outside the stack and are missed by pop(), so both lists are walked; stack.get(0) is
+        // always the current tab's root, which is why the stack is walked from one.
+        for (int i = 1; i < stack.size(); i++) stack.get(i).onDestroy();
+        for (Page p : tabPages) {
+            if (p != null) p.onDestroy();
+        }
     }
 
     /** Lets pages refresh the top bar after changing their own title. */
@@ -355,9 +378,11 @@ public class MainActivity extends Activity {
         updateTopBar();
     }
 
+    /** The playlists screen is pushed rather than a tab now, so it is looked for in the stack. */
     public void refreshPlaylists() {
-        Page p = tabPages[TAB_PLAYLISTS];
-        if (p instanceof PlaylistsPage) ((PlaylistsPage) p).refresh();
+        for (Page p : stack) {
+            if (p instanceof PlaylistsPage) ((PlaylistsPage) p).refresh();
+        }
     }
 
     private void showPendingCrash() {

@@ -1,8 +1,12 @@
 package com.nota.ui;
 
 import android.app.Dialog;
+import android.graphics.Bitmap;
+import android.graphics.drawable.BitmapDrawable;
 import android.graphics.drawable.ColorDrawable;
+import android.graphics.drawable.Drawable;
 import android.graphics.drawable.GradientDrawable;
+import android.graphics.drawable.LayerDrawable;
 import android.view.LayoutInflater;
 import android.view.View;
 import android.view.ViewGroup;
@@ -43,6 +47,8 @@ public class ArtistPage extends Page implements Playback.Listener {
     private Button follow;
     private ProgressBar progress;
     private boolean searched;
+    /** Empty while the catalogue is being asked, so the header is only asked once. */
+    private String banner;
 
     public ArtistPage(String name, Track face) {
         this.name = name;
@@ -173,6 +179,46 @@ public class ArtistPage extends Page implements Playback.Listener {
         }
         Ui.round(art, Ui.dp(host, 56));
         loadTint(cover);
+        loadBanner();
+    }
+
+    /**
+     * The wide picture from the artist's own page on the catalogue, behind the whole header. It
+     * arrives after the colour wash and takes its place, so the screen is never bare while it
+     * travels; artists without one simply keep the wash.
+     */
+    private void loadBanner() {
+        if (banner != null) return;
+        banner = "";
+        // Under a scrim, half the screen's width is as sharp as it needs to be, and it is the
+        // difference between a 130 KB picture and a 75 KB one.
+        final int w = Math.min(host.getResources().getDisplayMetrics().widthPixels, 540);
+        final int h = w * Ui.dp(host, 320)
+                / host.getResources().getDisplayMetrics().widthPixels;
+        YtApi.artistBanner(host, name, new YtApi.UrlCallback() {
+            public void onUrl(String url) {
+                if (adapter == null || url == null) return;
+                banner = url;
+                ArtLoader.get(host).loadWide(url, w, h, new ArtLoader.BitmapCallback() {
+                    public void onBitmap(Bitmap bmp) {
+                        if (adapter == null) return;
+                        host.setTint(new LayerDrawable(new Drawable[]{
+                                new BitmapDrawable(host.getResources(), bmp), scrim()}));
+                    }
+                });
+            }
+        });
+    }
+
+    /**
+     * What keeps the page readable over a photograph: the page colour, absent where the picture
+     * should be seen and whole where the songs begin. It is the background colour rather than
+     * black so the picture dissolves into the page in either theme.
+     */
+    private Drawable scrim() {
+        int rgb = host.getResources().getColor(R.color.bg) & 0xFFFFFF;
+        return new GradientDrawable(GradientDrawable.Orientation.TOP_BOTTOM,
+                new int[]{0x40000000 | rgb, 0xB0000000 | rgb, 0xFF000000 | rgb});
     }
 
     /** The thumbnail is the only picture there is, so tapping it gives it the whole screen. */

@@ -6,7 +6,24 @@
     <string name="tab_home">Home</string>
     <string name="tab_library">Library</string>
     <string name="tab_playlists">Playlists</string>
+    <string name="tab_history">History</string>
     <string name="tab_settings">Settings</string>
+
+    <!-- The row at the top of home. A name and the word under it together make the search, so
+         both are translated: asking in the reading language is what keeps answers in it. -->
+    <string name="mood_query">music</string>
+    <string-array name="mood_names">
+        <item>Energetic</item>
+        <item>Calm</item>
+        <item>Happy</item>
+        <item>Sad</item>
+        <item>Romantic</item>
+        <item>Nostalgic</item>
+        <item>Dreamy</item>
+        <item>Melancholic</item>
+        <item>Uplifting</item>
+        <item>Focused</item>
+    </string-array>
 
     <!-- Library sub tabs -->
     <string name="lib_songs">Songs</string>
@@ -80,6 +97,10 @@
 
     <!-- Playlists -->
     <string name="new_playlist">New playlist</string>
+    <string name="download">Download</string>
+    <string name="downloading">Downloading…</string>
+    <string name="download_remove">Remove download</string>
+    <string name="download_removed">Download removed</string>
     <string name="playlist_name">Playlist name</string>
     <string name="create">Create</string>
     <string name="rename">Rename</string>
@@ -149,6 +170,11 @@
     <string name="taste_short">%1$d signals</string>
     <string name="taste_counts">%1$d signals, %2$d pairings learned.</string>
     <string name="for_you">Suggestions for you</string>
+    <string name="mixes_for_you">Compilations for you</string>
+    <string name="new_releases">New releases</string>
+    <string name="mood_playlists">Playlists</string>
+    <!-- A compilation's name: an artist, and everything the radio puts next to them. -->
+    <string name="mix_of">%1$s mix</string>
     <string name="loved_artists">Artists you love</string>
     <string name="copied">Title copied</string>
     <string name="follow">Subscribe</string>

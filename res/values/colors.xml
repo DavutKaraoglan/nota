@@ -13,5 +13,13 @@
     <color name="art_placeholder">#FFEAEAEA</color>
     <color name="scrim">#66000000</color>
     <color name="ripple">#1F101010</color>
+    <!-- The mood chips: black on white in either theme, which is why these are spelled out here
+         and left out of the night colours. Following the theme turned them white on black, which
+         is the one thing they were asked not to do. -->
+    <color name="mood_bg">#FFFFFFFF</color>
+    <color name="mood_bg_idle">#4D000000</color>
+    <color name="mood_text_on">#FF101010</color>
+    <color name="mood_text_off">#FFFFFFFF</color>
+    <color name="mood_ripple">#33FFFFFF</color>
     <color name="controls_scrim">#59000000</color>
 </resources>

@@ -61,8 +61,8 @@
 
     <ImageView
         android:id="@+id/fav"
-        android:layout_width="14dp"
-        android:layout_height="14dp"
+        android:layout_width="18dp"
+        android:layout_height="18dp"
         android:layout_marginStart="8dp"
         android:visibility="gone"
         android:scaleType="fitCenter"

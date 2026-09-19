@@ -22,10 +22,10 @@ import com.nota.data.Prefetch;
 import com.nota.data.Prefs;
 import com.nota.data.Recommender;
 import com.nota.data.Signals;
+import com.nota.data.StreamProxy;
 import com.nota.data.YtApi;
 import com.nota.model.Track;
 
-import java.io.File;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
@@ -52,8 +52,16 @@ public class Playback implements MediaPlayer.OnCompletionListener,
     public static final int REPEAT_ONE = 2;
 
     public static final String KEY_AUTOPLAY = "autoplay";
-    /** Enough to keep playing for half an hour without asking the network again. */
-    private static final int AUTOPLAY_BATCH = 8;
+    /** Enough to keep playing for an hour without asking the network again. */
+    private static final int AUTOPLAY_BATCH = 16;
+    /**
+     * How many songs the queue is topped up to stay ahead of. Waiting for the last track meant
+     * the player screen showed a queue of one, which reads as the end of the music rather than
+     * as a list still being written.
+     */
+    private static final int MIN_AHEAD = 12;
+    /** A start slower than this is a fault worth recording; anything under it is just playback. */
+    private static final long SLOW_START_MS = 5000;
 
     private static Playback instance;
 
@@ -83,6 +91,8 @@ public class Playback implements MediaPlayer.OnCompletionListener,
     private int audioSessionId;
     /** Bumped on every open so a late stream URL cannot hijack a track the user skipped. */
     private int openGeneration;
+    private long openedAt;
+    private boolean servedFromCache;
     /** The track the player is on, held back so the next open can score the one it replaces. */
     private Track opened;
     /** The track a recommendation batch was last asked for, so the tail is only extended once. */
@@ -433,9 +443,36 @@ public class Playback implements MediaPlayer.OnCompletionListener,
         playWhenReady = autoStart;
         prepared = false;
         buffering = true;
-        openGeneration++;
+        final int generation = ++openGeneration;
+        openedAt = System.currentTimeMillis();
 
         releasePlayer();
+        opened = t;
+        PlayerService.start(app);
+        fireTrack();
+        fireState();
+
+        if (YtApi.isYouTube(t)) {
+            // Played through the loopback proxy rather than from a finished file: the song
+            // starts on its first bytes, and the copy it leaves behind serves the next listen.
+            String id = YtApi.videoId(t);
+            String url = id == null ? null : StreamProxy.get(app).url(id);
+            if (url == null) {
+                buffering = false;
+                onError(mp, 0, 0);
+                return;
+            }
+            servedFromCache = StreamProxy.get(app).cached(id);
+            open(Uri.parse(url));
+        } else if (t.isRemote()) {
+            open(Uri.parse(t.data));
+        } else {
+            open(ContentUris.withAppendedId(
+                    MediaStore.Audio.Media.EXTERNAL_CONTENT_URI, t.id));
+        }
+    }
+
+    private void open(Uri uri) {
         mp = new MediaPlayer();
         mp.setAudioAttributes(new AudioAttributes.Builder()
                 .setUsage(AudioAttributes.USAGE_MEDIA)
@@ -449,29 +486,24 @@ public class Playback implements MediaPlayer.OnCompletionListener,
         audioSessionId = mp.getAudioSessionId();
 
         try {
-            if (t.isRemote()) {
-                mp.setDataSource(app, Uri.parse(streamUrl(t)));
-            } else {
-                Uri uri = ContentUris.withAppendedId(
-                        MediaStore.Audio.Media.EXTERNAL_CONTENT_URI, t.id);
-                mp.setDataSource(app, uri);
-            }
+            mp.setDataSource(app, uri);
             mp.prepareAsync();
         } catch (Exception e) {
             buffering = false;
             onError(mp, 0, 0);
-            return;
         }
-        opened = t;
-
-        PlayerService.start(app);
-        fireTrack();
-        fireState();
     }
 
     public void onPrepared(MediaPlayer player) {
         prepared = true;
         buffering = false;
+        long waited = System.currentTimeMillis() - openedAt;
+        // Worth a line only when the wait was long enough to be felt. Noting every start turned
+        // the report into a log of the app working, which is then offered as if it were a crash.
+        if (YtApi.isYouTube(current()) && waited > SLOW_START_MS) {
+            CrashLog.note(app, "yt wait " + waited + "ms"
+                    + (servedFromCache ? " (cached)" : " (fetched)"));
+        }
         Fx.get(app).attach(audioSessionId);
         if (playWhenReady && requestFocus()) {
             try {
@@ -490,13 +522,12 @@ public class Playback implements MediaPlayer.OnCompletionListener,
     }
 
     /**
-     * Keeps the queue from running dry. Reaching the last track means the listener is out of
-     * things they chose, which is exactly where a played song should lead somewhere rather than
-     * back into the list it came from.
+     * Keeps the queue from running dry. Running low on things the listener chose is exactly where
+     * a played song should lead somewhere rather than back into the list it came from.
      */
     private void maybeExtend() {
         if (repeat != REPEAT_OFF || extending) return;
-        if (orderPos < 0 || orderPos != order.size() - 1) return;
+        if (orderPos < 0 || order.size() - 1 - orderPos >= MIN_AHEAD) return;
         if (!Prefs.getBool(app, KEY_AUTOPLAY, true)) return;
         final Track seed = current();
         if (seed == null || seed.key().equals(extendedFrom)) return;
@@ -542,12 +573,6 @@ public class Playback implements MediaPlayer.OnCompletionListener,
         }
     }
 
-    private String streamUrl(Track t) {
-        if (!YtApi.isYouTube(t)) return t.data;
-        File ready = Prefetch.get(app).ready(t);
-        return ready != null ? Uri.fromFile(ready).toString() : YtApi.streamUrl(t);
-    }
-
     /** The tracks after the current one, in the order they will play. */
     private List<Track> upcoming(int limit) {
         List<Track> out = new ArrayList<Track>(limit);
@@ -561,8 +586,11 @@ public class Playback implements MediaPlayer.OnCompletionListener,
         Track playingTrack = current();
         if (YtApi.isYouTube(playingTrack)) {
             // The report is handed out through public Downloads, so it carries the failure
-            // and not the address or the id of what was being listened to.
+            // and not the address or the id of what was being listened to. Exported on the
+            // spot rather than at the next launch, because a failure that only surfaces after
+            // a restart cannot be matched to what the listener was doing when it happened.
             CrashLog.note(app, "yt play failed what=" + what + " extra=" + extra);
+            CrashLog.exportPending(app);
         }
         // A stream that died says nothing about taste, so the track leaves unscored.
         opened = null;

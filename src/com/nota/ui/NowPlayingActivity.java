@@ -80,14 +80,20 @@ public class NowPlayingActivity extends Activity
     private boolean lookingUpLyrics;
     private boolean dragging;
     private int highlighted = -1;
+    /**
+     * The swap fades the old line out before setting the new one, so a line asked for now is
+     * only readable a fraction of a second later. The clock is read that far ahead to make up
+     * for it, which is the difference between a line arriving with the words and just after.
+     */
+    private static final long LYRIC_LEAD_MS = 160;
 
     private final Handler handler = new Handler(Looper.getMainLooper());
     private final Runnable tick = new Runnable() {
         public void run() {
             updateProgress();
-            // A line that lands half a second late reads as a mistake, so the timer runs
-            // tighter while there are timed words to follow.
-            handler.postDelayed(this, lyrics != null && lyrics.synced ? 250 : 500);
+            // A line that lands late reads as a mistake, so the timer runs tighter while there
+            // are timed words to follow: a quarter-second tick is a quarter-second of drift.
+            handler.postDelayed(this, lyrics != null && lyrics.synced ? 80 : 500);
         }
     };
     /** Keeps releasing hearts for as long as the button is held. */
@@ -473,7 +479,7 @@ public class NowPlayingActivity extends Activity
             if (total > 0) duration.setText(Ui.duration(total));
         }
         if (lyrics != null && lyrics.synced) {
-            int index = lyrics.indexAt(pos);
+            int index = lyrics.indexAt(pos + LYRIC_LEAD_MS);
             if (index != highlighted) {
                 highlighted = index;
                 lyricAdapter.notifyDataSetChanged();

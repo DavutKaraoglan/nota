@@ -10,9 +10,14 @@ import com.nota.model.Track;
 import org.json.JSONArray;
 import org.json.JSONObject;
 
+import java.io.UnsupportedEncodingException;
+import java.security.GeneralSecurityException;
 import java.util.ArrayList;
 import java.util.Iterator;
 import java.util.List;
+
+import javax.crypto.Mac;
+import javax.crypto.spec.SecretKeySpec;
 
 /**
  * YouTube as an on-demand catalogue, over the InnerTube endpoints its own apps use.
@@ -22,61 +27,15 @@ import java.util.List;
  */
 public class YtApi {
 
-    /** Marks a Track whose stream comes from the helper rather than from a local file. */
+    /** Marks a Track whose audio is pulled from YouTube rather than read from a local file. */
     public static final String PREFIX = "yt:";
-
-    /**
-     * Extraction runs on a server instead of the phone: YouTube stops feeding an app-built
-     * request after about a minute, while the same fetch from a plain host still returns the
-     * whole track. The helper answers ranged GETs and keeps what it fetched.
-     *
-     * <p>Its certificate is self-signed and pinned in the network security config, so this
-     * address cannot move without a new APK carrying the new certificate. The address itself
-     * lives in {@link Backend}, which is not part of the repository.
-     */
-
-    /**
-     * Long enough that a link handed to MediaPlayer still works when the track is resumed after
-     * a lunch break, short enough that one scraped from a build stops being useful.
-     */
-    private static final long LINK_LIFE_SEC = 12 * 60 * 60;
-
-    /**
-     * A playable URL for a YouTube track, or null when the id is not one. The query is signed
-     * so that the helper answers this build and not every crawler that finds the address.
-     */
-    public static String streamUrl(Track track) {
-        String id = videoId(track);
-        if (id == null) return null;
-        String query = "v=" + id + "&e=" + (System.currentTimeMillis() / 1000 + LINK_LIFE_SEC);
-        return Backend.HOST + "/stream?" + query + "&s=" + sign(query);
-    }
-
-    private static String sign(String query) {
-        try {
-            javax.crypto.Mac mac = javax.crypto.Mac.getInstance("HmacSHA256");
-            mac.init(new javax.crypto.spec.SecretKeySpec(
-                    Backend.secret().getBytes("UTF-8"), "HmacSHA256"));
-            byte[] sum = mac.doFinal(query.getBytes("UTF-8"));
-            char[] hex = new char[sum.length * 2];
-            for (int i = 0; i < sum.length; i++) {
-                hex[i * 2] = HEX[(sum[i] >> 4) & 0xF];
-                hex[i * 2 + 1] = HEX[sum[i] & 0xF];
-            }
-            return new String(hex);
-        } catch (Exception e) {
-            return "";
-        }
-    }
-
-    private static final char[] HEX = "0123456789abcdef".toCharArray();
 
     /**
      * An id reaches a URL query and a cache file name unescaped, and it arrives from a parsed
      * answer rather than from the app, so anything but the eleven characters YouTube uses is
      * treated as a broken parse.
      */
-    private static boolean validId(String id) {
+    static boolean validId(String id) {
         if (id == null || id.length() != 11) return false;
         for (int i = 0; i < id.length(); i++) {
             char ch = id.charAt(i);
@@ -100,12 +59,20 @@ public class YtApi {
     private static final long SEARCH_FRESH_MS = 6L * 60 * 60 * 1000;
     /** A mix is tied to one song rather than to a moment, so it keeps far longer than a search. */
     private static final long MIX_FRESH_MS = 7L * 24 * 60 * 60 * 1000;
+    /** Nobody releases twice in a day, and the shelf is the first thing home draws. */
+    private static final long RELEASE_FRESH_MS = 24L * 60 * 60 * 1000;
     private static final String SEARCH_URL =
             "https://music.youtube.com/youtubei/v1/search?prettyPrint=false";
     private static final String NEXT_URL =
             "https://music.youtube.com/youtubei/v1/next?prettyPrint=false";
     /** Restricts search to songs, so albums, artists and playlist rows stay out of the list. */
     private static final String SONGS_ONLY = "EgWKAQIIAWoKEAkQBRAKEAMQBA%3D%3D";
+    /**
+     * The same search restricted to records rather than songs: albums, EPs and singles. Songs
+     * carry no release date anywhere in the answer, and these rows carry the year, which is the
+     * only way to tell what an artist put out this season from what they are known for.
+     */
+    private static final String RELEASES_ONLY = "EgWKAQIYAWoKEAkQBRAKEAMQBA%3D%3D";
     /**
      * YouTube Music's own web client. It answers with square cover art and with title, artist,
      * album and length as separate fields, where the plain YouTube clients only offer a frame
@@ -208,7 +175,211 @@ public class YtApi {
         return t;
     }
 
+    // ---- new releases ----
+
+    public static void latestRelease(Context c, final String artist, final TrackCallback cb) {
+        final Context app = c.getApplicationContext();
+        new Thread(new Runnable() {
+            public void run() {
+                final List<Track> out = latestReleaseBlocking(app, artist);
+                MAIN.post(new Runnable() {
+                    public void run() {
+                        if (out == null) cb.onError();
+                        else cb.onTracks(out);
+                    }
+                });
+            }
+        }, "nota-yt-release").start();
+    }
+
+    /**
+     * Songs from the newest record an artist has out. Two questions rather than one: the record
+     * list is where the year lives, and the song list is where the playable ids live, so the
+     * newest title found in the first is looked up again in the second.
+     *
+     * <p>Blocking. Null means the catalogue could not be reached; empty means it had nothing
+     * recent under that exact name.
+     */
+    public static List<Track> latestReleaseBlocking(Context app, String artist) {
+        if (TextUtils.isEmpty(artist)) return null;
+        String body;
+        try {
+            body = new JSONObject()
+                    .put("query", artist)
+                    .put("params", RELEASES_ONLY)
+                    .put("context", YT_MUSIC.context())
+                    .toString();
+        } catch (Exception e) {
+            return null;
+        }
+        String json = DiskCache.loadPost(app, "yt", "rel:" + artist, RELEASE_FRESH_MS,
+                SEARCH_URL, body, YT_MUSIC.ua);
+        if (json == null) return null;
+
+        List<JSONObject> rows = new ArrayList<JSONObject>();
+        try {
+            collect(new JSONObject(json), "musicResponsiveListItemRenderer", rows);
+        } catch (Exception e) {
+            return null;
+        }
+
+        String newest = null;
+        int newestYear = 0;
+        for (JSONObject row : rows) {
+            String title = column(row, 0);
+            if (TextUtils.isEmpty(title)) continue;
+            // "Single • OZ Tarkan • 2026" is a different artist with the asked-for name inside
+            // theirs, and it is always the newest thing in the list. Only an exact name counts.
+            String[] meta = bullets(column(row, 1));
+            if (!names(meta, artist)) continue;
+            int year = year(meta);
+            if (year > newestYear) {
+                newestYear = year;
+                newest = title;
+            }
+        }
+        if (newest == null) return new ArrayList<Track>();
+
+        List<Track> songs = searchBlocking(app, artist + " " + newest);
+        if (songs == null) return null;
+        List<Track> out = new ArrayList<Track>();
+        for (Track t : songs) {
+            if (t.artist != null && t.artist.equalsIgnoreCase(artist)) out.add(t);
+        }
+        return out;
+    }
+
+    private static boolean names(String[] meta, String artist) {
+        for (String part : meta) {
+            if (part.equalsIgnoreCase(artist)) return true;
+        }
+        return false;
+    }
+
+    /** The year sits last on the line, where a length would sit on a song row. */
+    private static int year(String[] meta) {
+        if (meta.length == 0) return 0;
+        String last = meta[meta.length - 1];
+        if (last.length() != 4) return 0;
+        try {
+            return Integer.parseInt(last);
+        } catch (NumberFormatException e) {
+            return 0;
+        }
+    }
+
+    // ---- artist banner ----
+
+    /** The same search restricted to artists, so the answer is a channel rather than a song. */
+    private static final String ARTISTS_ONLY = "EgWKAQIgAWoKEAkQBRAKEAMQBA%3D%3D";
+    private static final String BROWSE_URL =
+            "https://music.youtube.com/youtubei/v1/browse?prettyPrint=false";
+    /** A banner outlives a record: an artist changes theirs about as often as they change label. */
+    private static final long BANNER_FRESH_MS = 30L * 24 * 60 * 60 * 1000;
+
+    public interface UrlCallback {
+        /** Null when there is no picture to be had. */
+        void onUrl(String url);
+    }
+
+    public static void artistBanner(Context c, final String artist, final UrlCallback cb) {
+        final Context app = c.getApplicationContext();
+        new Thread(new Runnable() {
+            public void run() {
+                final String url = artistBannerBlocking(app, artist);
+                MAIN.post(new Runnable() {
+                    public void run() {
+                        cb.onUrl(url);
+                    }
+                });
+            }
+        }, "nota-yt-banner").start();
+    }
+
+    /**
+     * The wide picture from the top of an artist's own page. Two questions again: the search
+     * knows which channel the name belongs to, and only the channel carries the banner.
+     *
+     * <p>Blocking. Null means the artist has none, or could not be reached.
+     */
+    public static String artistBannerBlocking(Context app, String artist) {
+        String channel = artistChannel(app, artist);
+        if (channel == null) return null;
+        String body;
+        try {
+            body = new JSONObject()
+                    .put("browseId", channel)
+                    .put("context", YT_MUSIC.context())
+                    .toString();
+        } catch (Exception e) {
+            return null;
+        }
+        String json = DiskCache.loadPost(app, "yt", "chan:" + channel, BANNER_FRESH_MS,
+                BROWSE_URL, body, YT_MUSIC.ua);
+        if (json == null) return null;
+        List<JSONObject> heads = new ArrayList<JSONObject>();
+        try {
+            collect(new JSONObject(json), "musicImmersiveHeaderRenderer", heads);
+        } catch (Exception e) {
+            return null;
+        }
+        return heads.isEmpty() ? null : thumbnail(heads.get(0));
+    }
+
+    private static String artistChannel(Context app, String artist) {
+        if (TextUtils.isEmpty(artist)) return null;
+        String body;
+        try {
+            body = new JSONObject()
+                    .put("query", artist)
+                    .put("params", ARTISTS_ONLY)
+                    .put("context", YT_MUSIC.context())
+                    .toString();
+        } catch (Exception e) {
+            return null;
+        }
+        String json = DiskCache.loadPost(app, "yt", "who:" + artist, BANNER_FRESH_MS,
+                SEARCH_URL, body, YT_MUSIC.ua);
+        if (json == null) return null;
+        List<JSONObject> rows = new ArrayList<JSONObject>();
+        try {
+            collect(new JSONObject(json), "musicResponsiveListItemRenderer", rows);
+        } catch (Exception e) {
+            return null;
+        }
+        for (JSONObject row : rows) {
+            // Searching "Tarkan" also answers with the tribute channels; wearing the name
+            // exactly is the whole test, as it is for a new release.
+            if (!artist.equalsIgnoreCase(column(row, 0))) continue;
+            String id = browseId(row);
+            if (id != null) return id;
+        }
+        return null;
+    }
+
+    private static String browseId(JSONObject row) {
+        JSONObject nav = row.optJSONObject("navigationEndpoint");
+        JSONObject browse = nav == null ? null : nav.optJSONObject("browseEndpoint");
+        String id = browse == null ? null : browse.optString("browseId", "");
+        return id != null && id.startsWith("UC") ? id : null;
+    }
+
     // ---- mix ----
+
+    public static void mix(Context c, final String videoId, final TrackCallback cb) {
+        final Context app = c.getApplicationContext();
+        new Thread(new Runnable() {
+            public void run() {
+                final List<Track> out = mixBlocking(app, videoId);
+                MAIN.post(new Runnable() {
+                    public void run() {
+                        if (out == null) cb.onError();
+                        else cb.onTracks(out);
+                    }
+                });
+            }
+        }, "nota-yt-mix").start();
+    }
 
     /**
      * The radio YouTube Music builds around one song. It is the only outside opinion the app can
@@ -328,8 +499,6 @@ public class YtApi {
         return total * 1000;
     }
 
-    // ---- streams ----
-
     public static boolean isYouTube(Track t) {
         return t != null && t.sourceId != null && t.sourceId.startsWith(PREFIX);
     }
@@ -340,4 +509,41 @@ public class YtApi {
         return validId(id) ? id : null;
     }
 
+    // ---- streams ----
+
+    /**
+     * Long enough that a link signed when a queue was built still works when the listener comes
+     * back to it, short enough that one copied out of the app stops working the same day.
+     */
+    private static final long LINK_LIFE_SEC = 12 * 60 * 60;
+    private static final char[] HEX = "0123456789abcdef".toCharArray();
+
+    /**
+     * A signed address for the helper that turns a video id into audio. The helper checks the
+     * signature before it fetches anything, so knowing where it lives is not enough to hand it
+     * ids of your own and make it work for you.
+     */
+    public static String streamUrl(String videoId) {
+        if (!validId(videoId)) return null;
+        String query = "v=" + videoId + "&e=" + (System.currentTimeMillis() / 1000
+                + LINK_LIFE_SEC);
+        return Backend.HOST + "/stream?" + query + "&s=" + sign(query);
+    }
+
+    private static String sign(String message) {
+        try {
+            Mac mac = Mac.getInstance("HmacSHA256");
+            mac.init(new SecretKeySpec(Backend.secret().getBytes("UTF-8"), "HmacSHA256"));
+            byte[] digest = mac.doFinal(message.getBytes("UTF-8"));
+            StringBuilder out = new StringBuilder(digest.length * 2);
+            for (byte b : digest) {
+                out.append(HEX[(b >> 4) & 0xF]).append(HEX[b & 0xF]);
+            }
+            return out.toString();
+        } catch (GeneralSecurityException e) {
+            throw new IllegalStateException("HMAC-SHA256 unavailable", e);
+        } catch (UnsupportedEncodingException e) {
+            throw new IllegalStateException("UTF-8 unavailable", e);
+        }
+    }
 }

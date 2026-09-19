@@ -13,6 +13,14 @@
 -->
 <network-security-config>
     <base-config cleartextTrafficPermitted="false" />
+    <!--
+      Except to the app itself. The player reads remote songs through a proxy the app runs on
+      the loopback address, which never leaves the device, and TLS there would mean trusting a
+      certificate the app both issues and checks.
+    -->
+    <domain-config cleartextTrafficPermitted="true">
+        <domain includeSubdomains="false">127.0.0.1</domain>
+    </domain-config>
     <domain-config cleartextTrafficPermitted="false">
         <domain includeSubdomains="false">example.invalid</domain>
         <trust-anchors>

@@ -36,6 +36,7 @@
         <activity
             android:name=".ui.NowPlayingActivity"
             android:exported="false"
+            android:theme="@style/NotaTheme.Sheet"
             android:launchMode="singleTop"
             android:configChanges="orientation|screenSize|keyboardHidden" />
 

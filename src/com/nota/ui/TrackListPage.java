@@ -15,6 +15,7 @@ import com.nota.R;
 import com.nota.data.ArtLoader;
 import com.nota.data.Db;
 import com.nota.data.MediaLibrary;
+import com.nota.data.YtApi;
 import com.nota.model.Album;
 import com.nota.model.Artist;
 import com.nota.model.FolderBucket;
@@ -28,7 +29,8 @@ import java.util.List;
 public class TrackListPage extends Page implements Playback.Listener, MediaLibrary.Listener {
 
     private static final int KIND_ALBUM = 0, KIND_ARTIST = 1, KIND_FOLDER = 2,
-            KIND_PLAYLIST = 3, KIND_FAVORITES = 4, KIND_RECENT = 5, KIND_MOST = 6;
+            KIND_PLAYLIST = 3, KIND_FAVORITES = 4, KIND_RECENT = 5, KIND_MOST = 6,
+            KIND_MIX = 7;
 
     private int kind;
     private String heading = "";
@@ -36,6 +38,12 @@ public class TrackListPage extends Page implements Playback.Listener, MediaLibra
     private Album album;
     private Artist artist;
     private FolderBucket folder;
+
+    /** The song a mix is built around, and what came back for it. Null means not asked yet. */
+    private Track seed;
+    private List<Track> mix;
+    private boolean asking;
+    private boolean gone;
 
     private TrackAdapter adapter;
     private ListView list;
@@ -71,6 +79,15 @@ public class TrackListPage extends Page implements Playback.Listener, MediaLibra
         TrackListPage p = new TrackListPage();
         p.kind = KIND_PLAYLIST;
         p.playlistId = id;
+        p.heading = name;
+        return p;
+    }
+
+    /** A compilation: the radio around one song, kept for as long as the screen is open. */
+    public static TrackListPage forMix(Track seed, String name) {
+        TrackListPage p = new TrackListPage();
+        p.kind = KIND_MIX;
+        p.seed = seed;
         p.heading = name;
         return p;
     }
@@ -169,6 +186,8 @@ public class TrackListPage extends Page implements Playback.Listener, MediaLibra
     public void onDestroy() {
         Playback.get(host).removeListener(this);
         MediaLibrary.get().removeListener(this);
+        // A radio can still be in flight; this says the screen it was for is gone.
+        gone = true;
     }
 
     private void reload() {
@@ -193,6 +212,14 @@ public class TrackListPage extends Page implements Playback.Listener, MediaLibra
             case KIND_RECENT:
                 items = MediaLibrary.resolve(host, Db.get(host).recentKeys(100));
                 break;
+            case KIND_MIX:
+                // The song it grew from opens the list, so the screen can be played from the
+                // moment it appears rather than after the radio has been asked.
+                if (mix == null) askForMix();
+                items = new ArrayList<Track>();
+                items.add(seed);
+                if (mix != null) items.addAll(mix);
+                break;
             default:
                 items = MediaLibrary.resolve(host, Db.get(host).mostPlayedKeys(100));
                 break;
@@ -202,6 +229,29 @@ public class TrackListPage extends Page implements Playback.Listener, MediaLibra
         adapter.setActiveKey(cur == null ? null : cur.key());
         bindHeader(items);
         showEmpty(items.isEmpty());
+    }
+
+    private void askForMix() {
+        if (asking) return;
+        asking = true;
+        YtApi.mix(host, YtApi.videoId(seed), new YtApi.TrackCallback() {
+            public void onTracks(List<Track> tracks) {
+                deliverMix(tracks);
+            }
+
+            public void onError() {
+                // An empty answer rather than none: the screen says the radio had nothing
+                // instead of sitting on a wait that will not end.
+                deliverMix(new ArrayList<Track>());
+            }
+        });
+    }
+
+    private void deliverMix(List<Track> tracks) {
+        asking = false;
+        if (gone) return;
+        mix = tracks;
+        reload();
     }
 
     private void bindHeader(List<Track> items) {
@@ -224,11 +274,13 @@ public class TrackListPage extends Page implements Playback.Listener, MediaLibra
 
         int icon = kind == KIND_ARTIST ? R.drawable.ic_artist
                 : kind == KIND_FOLDER ? R.drawable.ic_folder
-                : kind == KIND_PLAYLIST ? R.drawable.ic_playlist
+                : kind == KIND_PLAYLIST || kind == KIND_MIX ? R.drawable.ic_playlist
                 : kind == KIND_FAVORITES ? R.drawable.ic_favorite
                 : R.drawable.ic_album;
-        if (!items.isEmpty()) {
-            ArtLoader.get(host).bind(art, items.get(0), Ui.dp(host, 112), icon, Ui.dp(host, 34));
+        // A mix wears the cover of the song it grew from, which is there before the radio answers.
+        Track face = !items.isEmpty() ? items.get(0) : kind == KIND_MIX ? seed : null;
+        if (face != null) {
+            ArtLoader.get(host).bind(art, face, Ui.dp(host, 112), icon, Ui.dp(host, 34));
         } else {
             art.setTag(null);
             int pad = Ui.dp(host, 34);

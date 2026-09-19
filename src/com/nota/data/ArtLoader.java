@@ -186,9 +186,47 @@ public class ArtLoader {
         return (eq > 0 ? url.substring(0, eq) : url) + "=w" + bucket + "-h" + bucket + "-l90-rj";
     }
 
+    /** A picture that is not square and belongs to no track: an artist's banner. */
+    private static String sizedWide(String url, int w, int h) {
+        if (url == null || !url.contains("googleusercontent.com")) return url;
+        int eq = url.lastIndexOf('=');
+        // "-p" is the crop that fills the box, so the shape asked for is the shape that arrives
+        // and the view never has to stretch it.
+        return (eq > 0 ? url.substring(0, eq) : url) + "=w" + w + "-h" + h + "-p-l90-rj";
+    }
+
+    public interface BitmapCallback {
+        void onBitmap(Bitmap bmp);
+    }
+
+    public void loadWide(final String rawUrl, final int w, final int h, final BitmapCallback cb) {
+        final String key = cacheKey("w:" + rawUrl, w * h);
+        if (key == null || rawUrl == null) return;
+        Bitmap hit = cache.get(key);
+        if (hit != null) {
+            cb.onBitmap(hit);
+            return;
+        }
+        pool.execute(new Runnable() {
+            public void run() {
+                final Bitmap bmp = fetch(sizedWide(rawUrl, w, h), w);
+                if (bmp != null) cache.put(key, bmp);
+                main.post(new Runnable() {
+                    public void run() {
+                        if (bmp != null) cb.onBitmap(bmp);
+                    }
+                });
+            }
+        });
+    }
+
     private Bitmap loadRemote(String rawUrl, int size) {
         if (rawUrl == null || rawUrl.length() == 0) return null;
-        String url = sized(rawUrl, size);
+        return fetch(sized(rawUrl, size), size);
+    }
+
+    private Bitmap fetch(String url, int size) {
+        if (url == null || url.length() == 0) return null;
         File f = new File(diskDir, Integer.toHexString(url.hashCode()) + "_" + size);
         if (f.exists()) {
             Bitmap b = BitmapFactory.decodeFile(f.getAbsolutePath());

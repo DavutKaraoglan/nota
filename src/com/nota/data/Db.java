@@ -10,8 +10,11 @@ import android.database.sqlite.SQLiteStatement;
 import com.nota.model.Track;
 
 import java.util.ArrayList;
+import java.util.Collection;
+import java.util.HashMap;
 import java.util.HashSet;
 import java.util.LinkedHashMap;
+import java.util.Map;
 import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Set;
@@ -251,6 +254,16 @@ public class Db extends SQLiteOpenHelper {
         return favorites;
     }
 
+    /**
+     * Counts the writes that change what the home shelves would show. A screen that rebuilt
+     * itself on every return can compare this instead and stay as it is when nothing moved.
+     */
+    private int revision;
+
+    public int revision() {
+        return revision;
+    }
+
     public boolean isFavorite(String key) {
         return favorites().contains(key);
     }
@@ -262,6 +275,7 @@ public class Db extends SQLiteOpenHelper {
     }
 
     public boolean toggleFavorite(String key) {
+        revision++;
         if (favorites().remove(key)) {
             getWritableDatabase().delete("favorites", "track_key=?", new String[]{key});
             return false;
@@ -291,6 +305,7 @@ public class Db extends SQLiteOpenHelper {
     public void recordPlay(Track track) {
         // The catalogue copy must exist before the key lands in history, or the entry is dead.
         if (track.type == Track.TYPE_ONLINE) saveOnline(track);
+        revision++;
         String key = track.key();
         SQLiteDatabase db = getWritableDatabase();
         long now = System.currentTimeMillis();
@@ -342,6 +357,7 @@ public class Db extends SQLiteOpenHelper {
     }
 
     public void clearHistory() {
+        revision++;
         SQLiteDatabase db = getWritableDatabase();
         db.delete("history", null, null);
         db.delete("play_counts", null, null);
@@ -488,6 +504,34 @@ public class Db extends SQLiteOpenHelper {
                 new String[]{artist, String.valueOf(limit)});
         try {
             while (c.moveToNext()) out.add(readOnline(c));
+        } finally {
+            c.close();
+        }
+        return out;
+    }
+
+    /**
+     * The same lookup for a whole list at once. A history or playlist screen resolves a hundred
+     * keys before it can draw, and a hundred separate queries is a visible stall.
+     */
+    public Map<String, Track> online(Collection<String> sourceIds) {
+        Map<String, Track> out = new HashMap<String, Track>();
+        if (sourceIds.isEmpty()) return out;
+        StringBuilder holes = new StringBuilder();
+        String[] args = new String[sourceIds.size()];
+        int i = 0;
+        for (String id : sourceIds) {
+            if (i > 0) holes.append(',');
+            holes.append('?');
+            args[i++] = id;
+        }
+        Cursor c = getReadableDatabase().query("online_tracks", null,
+                "source_id IN (" + holes + ")", args, null, null, null);
+        try {
+            while (c.moveToNext()) {
+                Track t = readOnline(c);
+                out.put(t.sourceId, t);
+            }
         } finally {
             c.close();
         }

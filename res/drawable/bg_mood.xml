@@ -1,0 +1,23 @@
+<?xml version="1.0" encoding="utf-8"?>
+<ripple xmlns:android="http://schemas.android.com/apk/res/android"
+    android:color="@color/mood_ripple">
+    <item>
+        <selector>
+            <!-- Picked: filled white, with black on it. Unpicked: a black that lets the wash from
+                 the cover through, which is what keeps the strip part of the page rather than a
+                 row of boxes laid on top of it. -->
+            <item android:state_selected="true">
+                <shape android:shape="rectangle">
+                    <solid android:color="@color/mood_bg" />
+                    <corners android:radius="@dimen/art_radius" />
+                </shape>
+            </item>
+            <item>
+                <shape android:shape="rectangle">
+                    <solid android:color="@color/mood_bg_idle" />
+                    <corners android:radius="@dimen/art_radius" />
+                </shape>
+            </item>
+        </selector>
+    </item>
+</ripple>

@@ -128,6 +128,6 @@
         <include android:id="@+id/tab_home" layout="@layout/item_tab" />
         <include android:id="@+id/tab_discover" layout="@layout/item_tab" />
         <include android:id="@+id/tab_library" layout="@layout/item_tab" />
-        <include android:id="@+id/tab_playlists" layout="@layout/item_tab" />
+        <include android:id="@+id/tab_history" layout="@layout/item_tab" />
     </LinearLayout>
 </LinearLayout>

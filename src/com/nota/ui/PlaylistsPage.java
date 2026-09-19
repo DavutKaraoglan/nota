@@ -53,6 +53,11 @@ public class PlaylistsPage extends Page {
     }
 
     @Override
+    public boolean showsBack() {
+        return true;
+    }
+
+    @Override
     public boolean hasOverflow() {
         return true;
     }

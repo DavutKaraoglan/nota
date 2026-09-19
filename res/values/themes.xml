@@ -12,7 +12,24 @@
         <item name="android:textColorSecondary">@color/text_secondary</item>
     </style>
 
+    <!--
+      The player is a sheet that slides up from the bar and back down again. Its window has to
+      let the screen underneath show through for that: an opaque one puts its own background
+      behind the moving sheet, which reads as a panel appearing for the length of the slide.
+      The window animation stays off; the sheet does the moving itself.
+    -->
+    <style name="NotaTheme.Sheet" parent="NotaTheme">
+        <item name="android:windowBackground">@android:color/transparent</item>
+        <item name="android:windowIsTranslucent">true</item>
+        <item name="android:windowAnimationStyle">@null</item>
+    </style>
+
     <style name="NotaTheme.Dialog" parent="@android:style/Theme.Material.Light.Dialog.Alert">
         <item name="android:colorAccent">@color/accent</item>
+    </style>
+
+    <style name="SheetAnimation">
+        <item name="android:windowEnterAnimation">@anim/sheet_in</item>
+        <item name="android:windowExitAnimation">@anim/sheet_out</item>
     </style>
 </resources>

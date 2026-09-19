@@ -15,6 +15,7 @@ import com.nota.data.Db;
 import com.nota.data.Follows;
 import com.nota.data.MediaLibrary;
 import com.nota.data.Recommender;
+import com.nota.data.YtApi;
 import com.nota.model.Track;
 import com.nota.player.Playback;
 
@@ -33,6 +34,9 @@ public class HomePage extends Page implements MediaLibrary.Listener, Playback.Li
 
     private static final int SHELF = 5;
     private static final int SLIDER = 12;
+    /** A mood is the only thing on the screen when it is picked, so it is worth more rows. */
+    private static final int MOOD = 20;
+    private static final int MIXES = 8;
     /** How many favourites have to change before the suggestions are worth asking for again. */
     private static final int TASTE = 5;
 
@@ -43,6 +47,20 @@ public class HomePage extends Page implements MediaLibrary.Listener, Playback.Li
     private List<Track> forYou = new ArrayList<Track>();
     private String askedFor;
     private boolean asking;
+
+    /** The newest release by the artist at the head of the row, and whose it is. */
+    private List<Track> fresh = new ArrayList<Track>();
+    private String freshArtist;
+    private String askingFresh;
+
+    /** The mood on the chips, or null while home is about the listener's own playing. */
+    private String mood;
+    /** The mood {@link #moodTracks} answers, which is how a stale answer is told from a fresh one. */
+    private String moodShown;
+    private String asked;
+    private List<Track> moodTracks = new ArrayList<Track>();
+    /** The Db revision the shelves on screen were built from. -1 until they exist at all. */
+    private int builtAt = -1;
 
     @Override
     protected View onCreateView(LayoutInflater inflater, ViewGroup parent) {
@@ -73,7 +91,9 @@ public class HomePage extends Page implements MediaLibrary.Listener, Playback.Li
 
     @Override
     public void onShow() {
-        refresh();
+        // Rebuilding the shelves means a round of queries and a fresh set of views; coming back
+        // from another tab without having played or favourited anything earns none of that.
+        if (Db.get(host).revision() != builtAt) refresh();
         loadTint();
     }
 
@@ -124,20 +144,162 @@ public class HomePage extends Page implements MediaLibrary.Listener, Playback.Li
         if (sections == null) return;
         sections.removeAllViews();
         Db db = Db.get(host);
+        builtAt = db.revision();
 
-        askForYou(db);
+        addMoods();
+        // The mood row stands whether or not anything has been listened to, so the "nothing
+        // here yet" message counts the shelves that came after it rather than the whole column.
+        int beforeShelves = sections.getChildCount();
 
-        addSlider(R.string.on_repeat, MediaLibrary.resolve(host, db.mostPlayedKeys(SLIDER)),
-                TrackListPage.mostPlayed(host.getString(R.string.on_repeat)));
-        addShelf(R.string.for_you, forYou, null);
-        addArtists(artistFaces(db));
+        if (mood != null) {
+            // A picked mood is the subject of the page, and the listener's own shelves would
+            // only bury it. The row above is still there to put them back.
+            addMood();
+        } else {
+            askForYou(db);
+            List<Track> faces = artistFaces(db);
+            askForFresh(faces);
 
-        addShelf(R.string.recently_played, MediaLibrary.resolve(host, db.recentKeys(SHELF)),
-                TrackListPage.recent(host.getString(R.string.recently_played)));
-        addShelf(R.string.favorites, MediaLibrary.resolve(host, db.favoriteKeys()),
-                TrackListPage.favorites(host.getString(R.string.favorites)));
+            addShelf(host.getString(R.string.new_releases), fresh, 1, null);
 
-        empty.setVisibility(sections.getChildCount() == 0 ? View.VISIBLE : View.GONE);
+            List<Track> played = MediaLibrary.resolve(host, db.mostPlayedKeys(SLIDER));
+            addSlider(R.string.on_repeat, played,
+                    TrackListPage.mostPlayed(host.getString(R.string.on_repeat)));
+
+            addShelf(host.getString(R.string.for_you), forYou, SHELF, null);
+
+            // Built from what has actually been played first, and from the suggestions only where
+            // the listening runs out: a compilation is worth more when its starting point is one
+            // of theirs.
+            List<Track> seedPool = new ArrayList<Track>(played);
+            seedPool.addAll(forYou);
+            addMixes(host.getString(R.string.mixes_for_you), seedPool);
+
+            addArtists(faces);
+
+            addShelf(host.getString(R.string.recently_played),
+                    MediaLibrary.resolve(host, db.recentKeys(SHELF)), SHELF,
+                    TrackListPage.recent(host.getString(R.string.recently_played)));
+            addShelf(host.getString(R.string.favorites),
+                    MediaLibrary.resolve(host, db.favoriteKeys()), SHELF,
+                    TrackListPage.favorites(host.getString(R.string.favorites)));
+        }
+
+        empty.setVisibility(sections.getChildCount() == beforeShelves ? View.VISIBLE : View.GONE);
+    }
+
+    /**
+     * A way into the catalogue that does not need a name typed first. Each chip answers here
+     * rather than handing the screen over: picking one is a change of subject, not a change of
+     * place, and the same tap takes it back. The row works on a phone with no library and no
+     * listening behind it.
+     */
+    private void addMoods() {
+        View box = LayoutInflater.from(host).inflate(
+                R.layout.item_home_moods, sections, false);
+        LinearLayout row = (LinearLayout) box.findViewById(R.id.mood_row);
+        for (String name : host.getResources().getStringArray(R.array.mood_names)) {
+            final String picked = name;
+            TextView chip = (TextView) LayoutInflater.from(host).inflate(
+                    R.layout.item_mood_chip, row, false);
+            chip.setText(picked);
+            chip.setSelected(picked.equals(mood));
+            chip.setOnClickListener(new View.OnClickListener() {
+                public void onClick(View v) {
+                    mood = picked.equals(mood) ? null : picked;
+                    refresh();
+                }
+            });
+            row.addView(chip);
+        }
+        sections.addView(box);
+    }
+
+    /**
+     * What the chosen mood put on the screen. The search is asked for once per mood and the
+     * answer is drawn on the round that follows, so the wait shows rather than blanks the page.
+     */
+    private void addMood() {
+        if (!mood.equals(moodShown)) {
+            askForMood();
+            sections.addView(LayoutInflater.from(host).inflate(
+                    R.layout.item_home_skeleton, sections, false));
+            return;
+        }
+        if (moodTracks.isEmpty()) {
+            addNote(R.string.empty_search);
+            return;
+        }
+        addMixes(host.getString(R.string.mood_playlists), moodTracks);
+        addShelf(mood, moodTracks, MOOD, null);
+    }
+
+    private void askForMood() {
+        final String want = mood;
+        if (want.equals(asked)) return;
+        asked = want;
+        YtApi.search(host, want + " " + host.getString(R.string.mood_query),
+                new YtApi.TrackCallback() {
+                    public void onTracks(List<Track> tracks) {
+                        deliverMood(want, tracks);
+                    }
+
+                    public void onError() {
+                        // Remembered as an empty answer rather than as nothing: a mood that
+                        // cannot be answered should say so once, not ask again every round.
+                        deliverMood(want, new ArrayList<Track>());
+                    }
+                });
+    }
+
+    private void deliverMood(String want, List<Track> tracks) {
+        if (sections == null) return;
+        // Only ours to clear: a late answer to an earlier mood must not report the search that
+        // replaced it as finished, or the next round asks for that one all over again.
+        if (want.equals(asked)) asked = null;
+        // A chip tapped while this was in flight has already moved the screen on.
+        if (!want.equals(mood)) return;
+        moodTracks = tracks;
+        moodShown = want;
+        refresh();
+    }
+
+    private void addNote(int textRes) {
+        TextView note = (TextView) LayoutInflater.from(host).inflate(
+                R.layout.item_home_note, sections, false);
+        note.setText(textRes);
+        sections.addView(note);
+    }
+
+    /**
+     * What the artist at the head of the row has just put out. One artist and one song: a shelf
+     * of everything new by everyone would be a second discover page, and this is meant to be the
+     * one line that says a favourite has released something since the last look.
+     */
+    private void askForFresh(List<Track> faces) {
+        if (faces.isEmpty()) return;
+        final String who = faces.get(0).artist;
+        if (TextUtils.isEmpty(who) || who.equals(freshArtist) || who.equals(askingFresh)) return;
+        askingFresh = who;
+        YtApi.latestRelease(host, who, new YtApi.TrackCallback() {
+            public void onTracks(List<Track> tracks) {
+                deliverFresh(who, tracks);
+            }
+
+            public void onError() {
+                // Kept as an empty answer: an artist the catalogue cannot place should cost one
+                // question a session, not one per round.
+                deliverFresh(who, new ArrayList<Track>());
+            }
+        });
+    }
+
+    private void deliverFresh(String who, List<Track> tracks) {
+        if (sections == null) return;
+        if (who.equals(askingFresh)) askingFresh = null;
+        fresh = tracks;
+        freshArtist = who;
+        refresh();
     }
 
     /**
@@ -207,6 +369,51 @@ public class HomePage extends Page implements MediaLibrary.Listener, Playback.Li
         sections.addView(slider);
     }
 
+    /**
+     * Lists that nobody made: each card is the radio around one song, named after whoever sang it.
+     * One per artist, because two compilations grown from the same voice are the same compilation.
+     * The radio is only asked for once a card is opened, so a row of them costs nothing to show.
+     */
+    private void addMixes(CharSequence title, List<Track> pool) {
+        List<Track> seeds = new ArrayList<Track>();
+        Set<String> seen = new HashSet<String>();
+        for (Track t : pool) {
+            // A song on the phone has no radio behind it; only the catalogue answers for a seed.
+            if (!YtApi.isYouTube(t)) continue;
+            String who = TextUtils.isEmpty(t.artist) ? t.title : t.artist;
+            if (seen.add(who.toLowerCase(Locale.ROOT))) seeds.add(t);
+            if (seeds.size() == MIXES) break;
+        }
+        if (seeds.isEmpty()) return;
+
+        View slider = LayoutInflater.from(host).inflate(
+                R.layout.item_home_slider, sections, false);
+        TextView label = (TextView) slider.findViewById(R.id.section_title);
+        label.setText(title);
+        label.setBackground(null);
+
+        LinearLayout row = (LinearLayout) slider.findViewById(R.id.slider_row);
+        ArtLoader loader = ArtLoader.get(host);
+        int artPx = host.getResources().getDimensionPixelSize(R.dimen.card);
+        float radius = host.getResources().getDimension(R.dimen.art_radius);
+        for (final Track seed : seeds) {
+            final String name = host.getString(R.string.mix_of, Ui.artistOr(host, seed.artist));
+            View card = LayoutInflater.from(host).inflate(R.layout.item_cover_card, row, false);
+            ImageView art = (ImageView) card.findViewById(R.id.art);
+            Ui.round(art, radius);
+            loader.bind(art, seed, artPx, R.drawable.ic_playlist, Ui.dp(host, 34));
+            ((TextView) card.findViewById(R.id.title)).setText(name);
+            ((TextView) card.findViewById(R.id.subtitle)).setText(seed.title);
+            card.setOnClickListener(new View.OnClickListener() {
+                public void onClick(View v) {
+                    host.push(TrackListPage.forMix(seed, name));
+                }
+            });
+            row.addView(card);
+        }
+        sections.addView(slider);
+    }
+
     /** Subscriptions lead the row; behind them come the artists with the most listening. */
     private List<Track> artistFaces(Db db) {
         List<Track> faces = new ArrayList<Track>();
@@ -251,13 +458,14 @@ public class HomePage extends Page implements MediaLibrary.Listener, Playback.Li
         sections.addView(slider);
     }
 
-    private void addShelf(int titleRes, final List<Track> tracks, final Page seeAll) {
+    private void addShelf(CharSequence title, final List<Track> tracks, int limit,
+                          final Page seeAll) {
         if (tracks.isEmpty()) return;
-        final List<Track> shown = tracks.subList(0, Math.min(SHELF, tracks.size()));
+        final List<Track> shown = tracks.subList(0, Math.min(limit, tracks.size()));
         View shelf = LayoutInflater.from(host).inflate(
                 R.layout.item_home_section, sections, false);
         TextView label = (TextView) shelf.findViewById(R.id.section_title);
-        label.setText(titleRes);
+        label.setText(title);
         if (seeAll == null) {
             label.setBackground(null);
         } else {
