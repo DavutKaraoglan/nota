@@ -5,9 +5,9 @@
 Music player for Android. It plays the songs already on your phone, and when you want something
 else, it can fetch it. What it records about your listening stays on your own phone.
 
-| Home | Now playing |
-| --- | --- |
-| ![Home](docs/home.jpg) | ![Now playing](docs/player.jpg) |
+| Home | Artist | Now playing |
+| --- | --- | --- |
+| ![Home](docs/home.jpg) | ![Artist](docs/artist.jpg) | ![Now playing](docs/player.jpg) |
 
 ## What you get
 
