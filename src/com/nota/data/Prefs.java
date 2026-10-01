@@ -29,6 +29,14 @@ public class Prefs {
         get(c).edit().putInt(key, value).apply();
     }
 
+    public static long getLong(Context c, String key, long def) {
+        return get(c).getLong(key, def);
+    }
+
+    public static void setLong(Context c, String key, long value) {
+        get(c).edit().putLong(key, value).apply();
+    }
+
     public static String getString(Context c, String key, String def) {
         return get(c).getString(key, def);
     }

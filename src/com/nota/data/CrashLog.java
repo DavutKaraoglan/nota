@@ -15,12 +15,18 @@ import java.io.StringWriter;
 import java.text.SimpleDateFormat;
 import java.util.Date;
 import java.util.Locale;
+import java.util.regex.Pattern;
 
 /**
  * Writes uncaught exceptions to a file the user can hand over. Without a debugger attached
  * this is the only way to see a stack trace from a sideloaded build.
  */
 public class CrashLog {
+
+    /** Marks a block that came from a real crash, since notes share the file with them. */
+    private static final String FATAL = "FATAL ";
+
+    private static final Pattern ADDRESS = Pattern.compile("(https?://[^/\\s]+)[^\\s]*");
 
     private static boolean installed;
 
@@ -81,7 +87,7 @@ public class CrashLog {
     public static void note(Context context, String text) {
         try {
             String line = new SimpleDateFormat("yyyy-MM-dd HH:mm:ss", Locale.US).format(new Date())
-                    + " " + text + "\n";
+                    + " " + withoutAddresses(text) + "\n";
             FileOutputStream out =
                     new FileOutputStream(file(context.getApplicationContext()), true);
             try {
@@ -91,6 +97,16 @@ public class CrashLog {
             }
         } catch (Exception ignored) {
         }
+    }
+
+    /** Whether a report holds a stack trace at all, rather than only notes kept for diagnosis. */
+    public static boolean fatal(String report) {
+        return report != null && report.contains(FATAL);
+    }
+
+    private static String withoutAddresses(String text) {
+        if (text == null) return "";
+        return ADDRESS.matcher(text).replaceAll("$1/...");
     }
 
     private static String read(File f) {
@@ -112,6 +128,7 @@ public class CrashLog {
 
     private static void write(Context app, Thread thread, Throwable error) throws Exception {
         StringWriter sw = new StringWriter();
+        sw.write(FATAL);
         sw.write(new SimpleDateFormat("yyyy-MM-dd HH:mm:ss", Locale.US).format(new Date()));
         sw.write("\nthread: " + thread.getName() + "\n");
         error.printStackTrace(new PrintWriter(sw));
@@ -120,7 +137,7 @@ public class CrashLog {
         File f = file(app);
         FileOutputStream out = new FileOutputStream(f, true);
         try {
-            out.write(sw.toString().getBytes("UTF-8"));
+            out.write(withoutAddresses(sw.toString()).getBytes("UTF-8"));
         } finally {
             out.close();
         }

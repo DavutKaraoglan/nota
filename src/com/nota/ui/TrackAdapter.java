@@ -25,6 +25,12 @@ public class TrackAdapter extends BaseAdapter {
     private String activeKey;
     /** Album detail lists show a track number instead of repeating the album name. */
     private boolean numbered;
+    /**
+     * A heading to draw above a row, or null for most of them. Carried by the row itself rather
+     * than by rows of its own, so a position is still a song and every list keeps counting the
+     * way its screen already does.
+     */
+    private List<String> headings;
 
     public TrackAdapter(Context ctx, List<Track> items) {
         this.ctx = ctx;
@@ -35,6 +41,11 @@ public class TrackAdapter extends BaseAdapter {
 
     public void setItems(List<Track> list) {
         this.items = list == null ? new ArrayList<Track>() : list;
+        notifyDataSetChanged();
+    }
+
+    public void setHeadings(List<String> perItem) {
+        this.headings = perItem;
         notifyDataSetChanged();
     }
 
@@ -75,12 +86,18 @@ public class TrackAdapter extends BaseAdapter {
             h.duration = (TextView) v.findViewById(R.id.duration);
             h.number = (TextView) v.findViewById(R.id.number);
             h.fav = (ImageView) v.findViewById(R.id.fav);
+            h.day = (TextView) v.findViewById(R.id.day);
             h.fav.setColorFilter(ctx.getColor(R.color.accent));
             Ui.round(h.art, ctx.getResources().getDimension(R.dimen.art_radius));
             v.setTag(h);
         }
         Holder h = (Holder) v.getTag();
         Track t = items.get(position);
+
+        String heading = headings != null && position < headings.size()
+                ? headings.get(position) : null;
+        h.day.setText(heading);
+        h.day.setVisibility(heading == null ? View.GONE : View.VISIBLE);
 
         h.title.setText(t.title);
         h.subtitle.setText(subtitleFor(t));
@@ -114,6 +131,6 @@ public class TrackAdapter extends BaseAdapter {
 
     static class Holder {
         ImageView art, fav;
-        TextView title, subtitle, duration, number;
+        TextView title, subtitle, duration, number, day;
     }
 }

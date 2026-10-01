@@ -70,7 +70,12 @@ public class ArtLoader {
 
     /** Bitmaps are decoded per surface, so the row thumbnail must not satisfy a 320dp request. */
     private static String cacheKey(String key, int sizePx) {
-        return key == null ? null : key + "@" + sizePx;
+        if (key == null) return null;
+        return key + "@" + (key.startsWith("u:") ? bucket(sizePx) : sizePx);
+    }
+
+    private static int bucket(int px) {
+        return px <= 160 ? 160 : px <= 320 ? 320 : 544;
     }
 
     public Bitmap cached(Track t, int sizePx) {
@@ -121,6 +126,14 @@ public class ArtLoader {
     private static void showPlaceholder(ImageView view, int res, int pad) {
         view.setPadding(pad, pad, pad, pad);
         view.setImageResource(res);
+    }
+
+    /**
+     * The cover size the full-screen player binds at. Kept here because a cover fetched ahead of
+     * time only spares the player a wait when it was fetched at the size the player asks for.
+     */
+    public int playerSize() {
+        return Math.round(320 * app.getResources().getDisplayMetrics().density);
     }
 
     /** Synchronous load for the notification and the full-screen player. */
@@ -181,9 +194,9 @@ public class ArtLoader {
      */
     private static String sized(String url, int px) {
         if (url == null || !url.contains("googleusercontent.com")) return url;
-        int bucket = px <= 160 ? 160 : px <= 320 ? 320 : 544;
+        int side = bucket(px);
         int eq = url.lastIndexOf('=');
-        return (eq > 0 ? url.substring(0, eq) : url) + "=w" + bucket + "-h" + bucket + "-l90-rj";
+        return (eq > 0 ? url.substring(0, eq) : url) + "=w" + side + "-h" + side + "-l90-rj";
     }
 
     /** A picture that is not square and belongs to no track: an artist's banner. */
@@ -227,10 +240,13 @@ public class ArtLoader {
 
     private Bitmap fetch(String url, int size) {
         if (url == null || url.length() == 0) return null;
-        File f = new File(diskDir, Integer.toHexString(url.hashCode()) + "_" + size);
+        File f = new File(diskDir, DiskCache.digest(url) + "_" + bucket(size));
         if (f.exists()) {
-            Bitmap b = BitmapFactory.decodeFile(f.getAbsolutePath());
+            BitmapFactory.Options o = new BitmapFactory.Options();
+            o.inPreferredConfig = Bitmap.Config.RGB_565;
+            Bitmap b = BitmapFactory.decodeFile(f.getAbsolutePath(), o);
             if (b != null) {
+                f.setLastModified(System.currentTimeMillis());
                 DataSaver.get(app).hit(f);
                 return b;
             }
@@ -250,7 +266,7 @@ public class ArtLoader {
             DataSaver.get(app).addDownloaded(Math.max(conn.getContentLength(), 0));
             if (b != null) {
                 FileOutputStream out = new FileOutputStream(f);
-                b.compress(Bitmap.CompressFormat.PNG, 90, out);
+                b.compress(Bitmap.CompressFormat.JPEG, 90, out);
                 out.close();
             }
             return b;

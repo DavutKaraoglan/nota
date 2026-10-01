@@ -44,13 +44,9 @@ public class Lyrics {
     /** Empty when nothing was found; synced is false for plain text. */
     public final List<Line> lines;
     public final boolean synced;
-    /** True when lines had to be spelled out in Latin letters, which a real romaji upload beats. */
-    final boolean converted;
-
-    private Lyrics(List<Line> lines, boolean synced, boolean converted) {
+    private Lyrics(List<Line> lines, boolean synced) {
         this.lines = lines;
         this.synced = synced;
-        this.converted = converted;
     }
 
     private static final Handler MAIN = new Handler(Looper.getMainLooper());
@@ -126,17 +122,12 @@ public class Lyrics {
         if (seconds > 0 && artist.length() > 0) {
             exact = ask(app, t.durationMs, url("get", "artist_name", artist,
                     "track_name", title, "duration", String.valueOf(seconds)));
-            // A romanised upload, where one exists, sits in the search results beside the original.
-            // Worth the second call only when the exact answer came in letters this cannot read.
-            if (exact.synced && !exact.converted) return exact;
+            if (exact.synced) return exact;
         }
         Lyrics searched = ask(app, t.durationMs,
                 url("search", "artist_name", artist, "track_name", title));
         // Words without timings still beat nothing, so the cheap answer is kept as a floor.
-        if (searched.lines.isEmpty()) return exact;
-        // Both spelled out: the exact lookup is the better cut, so nothing is gained by trading.
-        if (exact.synced && searched.converted) return exact;
-        return searched;
+        return searched.lines.isEmpty() ? exact : searched;
     }
 
     private static Lyrics ask(Context app, long durationMs, String url) {
@@ -167,7 +158,6 @@ public class Lyrics {
         JSONArray all = new JSONArray(body);
         JSONObject best = null;
         long bestGap = Long.MAX_VALUE;
-        boolean bestReadable = false;
         for (int i = 0; i < all.length(); i++) {
             JSONObject record = all.optJSONObject(i);
             if (record == null) continue;
@@ -176,14 +166,8 @@ public class Lyrics {
             long gap = durationMs <= 0 ? 0
                     : Math.abs((long) (record.optDouble("duration", 0) * 1000) - durationMs);
             if (gap > LENGTH_SLACK_MS) continue;
-            // A Japanese song is often uploaded twice, once in kana and once romanised. The one
-            // that can be read wins outright: a few milliseconds of drift cost less than a screen
-            // of characters the listener cannot follow.
-            boolean plain = Romaji.readable(timed);
-            if (best != null && !plain && bestReadable) continue;
-            if (best == null || (plain && !bestReadable) || gap < bestGap) {
+            if (best == null || gap < bestGap) {
                 bestGap = gap;
-                bestReadable = plain;
                 best = record;
             }
         }
@@ -224,7 +208,7 @@ public class Lyrics {
     }
 
     private static Lyrics empty() {
-        return new Lyrics(Collections.<Line>emptyList(), false, false);
+        return new Lyrics(Collections.<Line>emptyList(), false);
     }
 
     private static Lyrics read(File file) {
@@ -248,7 +232,6 @@ public class Lyrics {
         if (text == null || text.length() == 0) return empty();
         List<Line> out = new ArrayList<Line>();
         boolean synced = false;
-        boolean converted = false;
         for (String raw : text.split("\n")) {
             if (out.size() >= MAX_LINES) break;
             if (LRC_TAG.matcher(raw.trim()).matches()) continue;
@@ -260,11 +243,6 @@ public class Lyrics {
                 end = m.end();
             }
             String body = raw.substring(end).trim();
-            if (body.length() > 0 && !Romaji.readable(body)) {
-                String latin = Romaji.apply(body);
-                converted |= !latin.equals(body);
-                body = latin;
-            }
             if (stamps.isEmpty()) {
                 if (body.length() > 0) out.add(new Line(-1, body));
             } else {
@@ -283,18 +261,16 @@ public class Lyrics {
                 }
             });
         }
-        return new Lyrics(out, synced, converted);
+        return new Lyrics(out, synced);
     }
 
     /** Index of the line that should be highlighted, or -1 before the first stamp. */
-    public int indexAt(long positionMs) {
+    public int indexAt(long positionMs, int near) {
         if (!synced) return -1;
-        int found = -1;
-        for (int i = 0; i < lines.size(); i++) {
-            if (lines.get(i).timeMs <= positionMs) found = i;
-            else break;
-        }
-        return found;
+        int i = Math.min(near, lines.size() - 1);
+        while (i >= 0 && lines.get(i).timeMs > positionMs) i--;
+        while (i + 1 < lines.size() && lines.get(i + 1).timeMs <= positionMs) i++;
+        return i;
     }
 
     private static long toMs(Matcher m) {

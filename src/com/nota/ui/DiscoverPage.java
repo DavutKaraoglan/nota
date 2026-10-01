@@ -13,6 +13,7 @@ import android.widget.TextView;
 
 import com.nota.R;
 import com.nota.data.ArtLoader;
+import com.nota.data.Connectivity;
 import com.nota.data.Prefs;
 import com.nota.data.Signals;
 import com.nota.data.YtApi;
@@ -40,6 +41,8 @@ public class DiscoverPage extends Page implements Playback.Listener {
     private String query = "";
     /** Incremented on every request so a late response from an older query is ignored. */
     private int requestId;
+    /** Whether the search on screen is an unanswered one rather than an empty one. */
+    private boolean failed;
 
     @Override
     protected View onCreateView(LayoutInflater inflater, ViewGroup parent) {
@@ -86,6 +89,11 @@ public class DiscoverPage extends Page implements Playback.Listener {
     }
 
     @Override
+    public void onOnline(boolean online) {
+        if (online && failed) load();
+    }
+
+    @Override
     public void onSearch(String q) {
         query = q == null ? "" : q.trim();
         load();
@@ -96,6 +104,12 @@ public class DiscoverPage extends Page implements Playback.Listener {
         final int id = ++requestId;
         if (query.length() == 0) {
             deliver(new ArrayList<Track>(), R.string.discover_search_hint, false);
+            return;
+        }
+        // Said before the request rather than after it fails: offline the answer is known, and
+        // it is a different answer from a catalogue that would not speak.
+        if (!Connectivity.isOnline(host)) {
+            deliver(new ArrayList<Track>(), R.string.offline_search, true);
             return;
         }
         setLoading(true);
@@ -114,6 +128,7 @@ public class DiscoverPage extends Page implements Playback.Listener {
 
     private void deliver(List<Track> found, int emptyRes, boolean retry) {
         setLoading(false);
+        failed = retry;
         // A search worth keeping is one that answered; the first hit lends the card its cover.
         if (query.length() > 0 && !found.isEmpty()) {
             remember(query, found.get(0).artUrl);

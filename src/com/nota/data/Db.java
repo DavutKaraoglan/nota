@@ -15,9 +15,10 @@ import java.util.HashMap;
 import java.util.HashSet;
 import java.util.LinkedHashMap;
 import java.util.Map;
-import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Set;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
 
 /** Local store for playlists, favorites and history. */
 public class Db extends SQLiteOpenHelper {
@@ -30,11 +31,17 @@ public class Db extends SQLiteOpenHelper {
     }
 
     private static final String NAME = "nota.db";
-    private static final int VERSION = 3;
+    private static final int VERSION = 5;
 
     private static Db instance;
 
     private Set<String> favorites;
+
+    private static final ExecutorService writes = Executors.newSingleThreadExecutor();
+
+    public static void background(Runnable task) {
+        writes.execute(task);
+    }
 
     public static synchronized Db get(Context c) {
         if (instance == null) instance = new Db(c.getApplicationContext());
@@ -68,15 +75,36 @@ public class Db extends SQLiteOpenHelper {
         db.execSQL("CREATE TABLE play_counts ("
                 + "track_key TEXT PRIMARY KEY,"
                 + "plays INTEGER NOT NULL,"
-                + "last_at INTEGER NOT NULL)");
+                + "last_at INTEGER NOT NULL,"
+                + "heard_ms INTEGER NOT NULL DEFAULT 0)");
         createOnlineTracks(db);
         createSignals(db);
+        createTimeIndexes(db);
     }
 
     @Override
     public void onUpgrade(SQLiteDatabase db, int from, int to) {
         if (from < 2) createOnlineTracks(db);
         if (from < 3) createSignals(db);
+        if (from < 4) createHeard(db);
+        if (from < 5) createTimeIndexes(db);
+    }
+
+    private static void createTimeIndexes(SQLiteDatabase db) {
+        db.execSQL("CREATE INDEX IF NOT EXISTS idx_history_at ON history(played_at)");
+        db.execSQL("CREATE INDEX IF NOT EXISTS idx_events_at ON events(at)");
+    }
+
+    /**
+     * Listening time, which used to be guessed as plays times length. Old rows are seeded with
+     * that same guess so a listener's history does not read as zero on the day the real measure
+     * starts; everything after this is measured.
+     */
+    private static void createHeard(SQLiteDatabase db) {
+        db.execSQL("ALTER TABLE play_counts ADD COLUMN heard_ms INTEGER NOT NULL DEFAULT 0");
+        db.execSQL("UPDATE play_counts SET heard_ms = plays * COALESCE("
+                + "(SELECT duration FROM online_tracks WHERE source_id = SUBSTR(track_key, 3)), 0) "
+                + "WHERE track_key LIKE 'o:%'");
     }
 
     /**
@@ -305,7 +333,6 @@ public class Db extends SQLiteOpenHelper {
     public void recordPlay(Track track) {
         // The catalogue copy must exist before the key lands in history, or the entry is dead.
         if (track.type == Track.TYPE_ONLINE) saveOnline(track);
-        revision++;
         String key = track.key();
         SQLiteDatabase db = getWritableDatabase();
         long now = System.currentTimeMillis();
@@ -331,17 +358,43 @@ public class Db extends SQLiteOpenHelper {
                 + "(SELECT id FROM history ORDER BY played_at DESC LIMIT 500)");
     }
 
+    /**
+     * Adds time the track was heard for. The row is made by {@link #recordPlay}, so a tally with
+     * nowhere to land belongs to a play that never started and is dropped.
+     */
+    public void addListened(String trackKey, long ms) {
+        if (ms <= 0) return;
+        SQLiteStatement st = getWritableDatabase().compileStatement(
+                "UPDATE play_counts SET heard_ms = heard_ms + ? WHERE track_key = ?");
+        st.bindLong(1, ms);
+        st.bindString(2, trackKey);
+        try {
+            st.executeUpdateDelete();
+        } finally {
+            st.close();
+        }
+    }
+
     /** Most recent first, one entry per track. */
     public List<String> recentKeys(int limit) {
-        Set<String> seen = new LinkedHashSet<String>();
-        Cursor c = getReadableDatabase().query("history", new String[]{"track_key"},
+        return new ArrayList<String>(recentPlays(limit).keySet());
+    }
+
+    /** The same list, each song against the last time it was played. */
+    public LinkedHashMap<String, Long> recentPlays(int limit) {
+        LinkedHashMap<String, Long> out = new LinkedHashMap<String, Long>();
+        Cursor c = getReadableDatabase().query("history",
+                new String[]{"track_key", "played_at"},
                 null, null, null, null, "played_at DESC", String.valueOf(limit * 4));
         try {
-            while (c.moveToNext() && seen.size() < limit) seen.add(c.getString(0));
+            while (c.moveToNext() && out.size() < limit) {
+                String key = c.getString(0);
+                if (!out.containsKey(key)) out.put(key, c.getLong(1));
+            }
         } finally {
             c.close();
         }
-        return new ArrayList<String>(seen);
+        return out;
     }
 
     public List<String> mostPlayedKeys(int limit) {
@@ -492,6 +545,25 @@ public class Db extends SQLiteOpenHelper {
             c.close();
         }
         return out;
+    }
+
+    /**
+     * How long this artist has actually sounded, summed from measured listening rather than from
+     * play counts, which credited a song abandoned after ten seconds with its whole length. Only
+     * what the catalogue half of the app knows: a local file's length lives in MediaStore, not
+     * here, and an artist page is built out of online tracks anyway.
+     */
+    public long listenedMs(String artist) {
+        Cursor c = getReadableDatabase().rawQuery(
+                "SELECT SUM(p.heard_ms) FROM play_counts p JOIN online_tracks t "
+                        + "ON t.source_id = SUBSTR(p.track_key, 3) "
+                        + "WHERE p.track_key LIKE 'o:%' AND LOWER(t.artist) = LOWER(?)",
+                new String[]{artist});
+        try {
+            return c.moveToFirst() ? c.getLong(0) : 0;
+        } finally {
+            c.close();
+        }
     }
 
     /** Everything already known about an artist, so their page has something before the search. */

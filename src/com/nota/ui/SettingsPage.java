@@ -27,8 +27,14 @@ public class SettingsPage extends Page {
     public static final String KEY_THEME = "theme";
     public static final int THEME_SYSTEM = 0, THEME_LIGHT = 1, THEME_DARK = 2;
 
-    private static final int ROW_THEME = 0, ROW_SLEEP = 1, ROW_EQ = 2, ROW_AUTOPLAY = 3,
-            ROW_DATA = 4, ROW_TASTE = 5, ROW_CLEAR = 6, ROW_ABOUT = 7;
+    /** A language tag, or empty for whatever the phone itself is set to. */
+    public static final String KEY_LANGUAGE = "language";
+    private static final String[] LANGUAGES = {"", "tr", "en"};
+    /** Each language named in itself, the way a speaker of it would look for it in a list. */
+    private static final String[] LANGUAGE_NAMES = {null, "Türkçe", "English"};
+
+    private static final int ROW_THEME = 0, ROW_LANGUAGE = 1, ROW_SLEEP = 2, ROW_EQ = 3,
+            ROW_AUTOPLAY = 4, ROW_DATA = 5, ROW_TASTE = 6, ROW_CLEAR = 7, ROW_ABOUT = 8;
 
     private static final int[] SLEEP_MINUTES = {0, 15, 30, 45, 60, 90};
 
@@ -39,9 +45,9 @@ public class SettingsPage extends Page {
     protected View onCreateView(LayoutInflater inflater, ViewGroup parent) {
         View root = inflater.inflate(R.layout.view_list, parent, false);
         ListView list = (ListView) root.findViewById(R.id.list);
-        list.setFastScrollEnabled(false);
 
         rows.add(ROW_THEME);
+        rows.add(ROW_LANGUAGE);
         rows.add(ROW_SLEEP);
         rows.add(ROW_EQ);
         rows.add(ROW_AUTOPLAY);
@@ -74,6 +80,9 @@ public class SettingsPage extends Page {
         switch (row) {
             case ROW_THEME:
                 pickTheme();
+                break;
+            case ROW_LANGUAGE:
+                pickLanguage();
                 break;
             case ROW_SLEEP:
                 pickSleep();
@@ -160,6 +169,34 @@ public class SettingsPage extends Page {
                 .show();
     }
 
+    private void pickLanguage() {
+        final String[] labels = new String[LANGUAGES.length];
+        labels[0] = host.getString(R.string.theme_system);
+        for (int i = 1; i < LANGUAGES.length; i++) labels[i] = LANGUAGE_NAMES[i];
+        new AlertDialog.Builder(host, R.style.NotaTheme_Dialog)
+                .setTitle(R.string.language)
+                .setSingleChoiceItems(labels, chosenLanguage(),
+                        new DialogInterface.OnClickListener() {
+                            public void onClick(DialogInterface d, int which) {
+                                d.dismiss();
+                                if (which == chosenLanguage()) return;
+                                Prefs.setString(host, KEY_LANGUAGE, LANGUAGES[which]);
+                                // The whole app is already drawn in the old language, and only
+                                // being built again picks up the new one.
+                                host.recreate();
+                            }
+                        })
+                .show();
+    }
+
+    private int chosenLanguage() {
+        String tag = Prefs.getString(host, KEY_LANGUAGE, "");
+        for (int i = 0; i < LANGUAGES.length; i++) {
+            if (LANGUAGES[i].equals(tag)) return i;
+        }
+        return 0;
+    }
+
     private void pickSleep() {
         final String[] labels = new String[SLEEP_MINUTES.length];
         labels[0] = host.getString(R.string.sleep_off);
@@ -184,6 +221,10 @@ public class SettingsPage extends Page {
                 int mode = Prefs.getInt(host, KEY_THEME, THEME_SYSTEM);
                 return host.getString(mode == THEME_LIGHT ? R.string.theme_light
                         : mode == THEME_DARK ? R.string.theme_dark : R.string.theme_system);
+            }
+            case ROW_LANGUAGE: {
+                int at = chosenLanguage();
+                return at == 0 ? host.getString(R.string.theme_system) : LANGUAGE_NAMES[at];
             }
             case ROW_SLEEP: {
                 long left = Playback.get(host).sleepRemainingMs();
@@ -213,6 +254,8 @@ public class SettingsPage extends Page {
         switch (row) {
             case ROW_THEME:
                 return R.string.theme;
+            case ROW_LANGUAGE:
+                return R.string.language;
             case ROW_SLEEP:
                 return R.string.sleep_timer;
             case ROW_EQ:

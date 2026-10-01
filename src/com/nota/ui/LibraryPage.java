@@ -13,6 +13,8 @@ import android.widget.PopupMenu;
 import android.widget.TextView;
 
 import com.nota.R;
+import com.nota.data.Db;
+import com.nota.data.Downloads;
 import com.nota.data.MediaLibrary;
 import com.nota.model.Album;
 import com.nota.model.Artist;
@@ -26,21 +28,32 @@ import java.util.Comparator;
 import java.util.List;
 import java.util.Locale;
 
-public class LibraryPage extends Page implements MediaLibrary.Listener, Playback.Listener {
+public class LibraryPage extends Page
+        implements MediaLibrary.Listener, Playback.Listener, Downloads.Listener {
 
-    private static final int S_SONGS = 0, S_ALBUMS = 1, S_ARTISTS = 2, S_FOLDERS = 3;
+    private static final int S_SONGS = 0, S_ALBUMS = 1, S_ARTISTS = 2, S_FOLDERS = 3,
+            S_LIKED = 4, S_DOWNLOADED = 5;
+    private static final int TOP_LIKED = 0, TOP_DOWNLOADED = 1, TOP_LOCAL = 2;
 
     public static final int SORT_TITLE = 0, SORT_ARTIST = 1, SORT_ALBUM = 2,
             SORT_ADDED = 3, SORT_DURATION = 4;
 
     private final TextView[] chips = new TextView[4];
-    private final View[] sections = new View[4];
+    private final TextView[] topChips = new TextView[3];
+    private final View[] sections = new View[6];
+    private final TrackAdapter[] trackAdapters = new TrackAdapter[6];
     private FrameLayout container;
-    private int section = S_SONGS;
+    private View localChips;
+    private int section = S_LIKED;
+    /** Which of the local views to return to when the listener comes back to them. */
+    private int localSection = S_SONGS;
+    private static final Locale TURKISH = new Locale("tr", "TR");
+
     private String query = "";
     private int sortMode = SORT_TITLE;
+    private List<Track> sortedSongs;
+    private int sortedAs = -1;
 
-    private TrackAdapter songAdapter;
     private AlbumAdapter albumAdapter;
     private GroupAdapter artistAdapter;
     private GroupAdapter folderAdapter;
@@ -49,6 +62,23 @@ public class LibraryPage extends Page implements MediaLibrary.Listener, Playback
     protected View onCreateView(LayoutInflater inflater, ViewGroup parent) {
         View root = inflater.inflate(R.layout.view_library, parent, false);
         container = (FrameLayout) root.findViewById(R.id.lib_content);
+        localChips = root.findViewById(R.id.local_chips);
+
+        topChips[TOP_LIKED] = (TextView) root.findViewById(R.id.chip_liked);
+        topChips[TOP_DOWNLOADED] = (TextView) root.findViewById(R.id.chip_downloaded);
+        topChips[TOP_LOCAL] = (TextView) root.findViewById(R.id.chip_local);
+        topChips[TOP_LIKED].setText(R.string.favorites);
+        topChips[TOP_DOWNLOADED].setText(R.string.lib_downloaded);
+        topChips[TOP_LOCAL].setText(R.string.lib_local);
+        final int[] tops = {S_LIKED, S_DOWNLOADED, S_SONGS};
+        for (int i = 0; i < topChips.length; i++) {
+            final int index = i;
+            topChips[i].setOnClickListener(new View.OnClickListener() {
+                public void onClick(View v) {
+                    showSection(tops[index] == S_SONGS ? localSection : tops[index]);
+                }
+            });
+        }
 
         chips[S_SONGS] = (TextView) root.findViewById(R.id.chip_songs);
         chips[S_ALBUMS] = (TextView) root.findViewById(R.id.chip_albums);
@@ -69,7 +99,8 @@ public class LibraryPage extends Page implements MediaLibrary.Listener, Playback
 
         MediaLibrary.get().addListener(this);
         Playback.get(host).addListener(this);
-        showSection(S_SONGS);
+        Downloads.get(host).addListener(this);
+        showSection(section);
         return root;
     }
 
@@ -97,6 +128,7 @@ public class LibraryPage extends Page implements MediaLibrary.Listener, Playback
     public void onDestroy() {
         MediaLibrary.get().removeListener(this);
         Playback.get(host).removeListener(this);
+        Downloads.get(host).removeListener(this);
     }
 
     public void refresh() {
@@ -107,6 +139,12 @@ public class LibraryPage extends Page implements MediaLibrary.Listener, Playback
 
     private void showSection(int index) {
         section = index;
+        boolean local = index <= S_FOLDERS;
+        if (local) localSection = index;
+        topChips[TOP_LIKED].setSelected(index == S_LIKED);
+        topChips[TOP_DOWNLOADED].setSelected(index == S_DOWNLOADED);
+        topChips[TOP_LOCAL].setSelected(local);
+        localChips.setVisibility(local ? View.VISIBLE : View.GONE);
         for (int i = 0; i < chips.length; i++) chips[i].setSelected(i == index);
         View v = sections[index];
         if (v == null) {
@@ -139,17 +177,18 @@ public class LibraryPage extends Page implements MediaLibrary.Listener, Playback
             return v;
         }
 
-        if (index == S_SONGS) {
-            songAdapter = new TrackAdapter(host, new ArrayList<Track>());
-            list.setAdapter(songAdapter);
+        if (index == S_SONGS || index == S_LIKED || index == S_DOWNLOADED) {
+            final TrackAdapter adapter = new TrackAdapter(host, new ArrayList<Track>());
+            trackAdapters[index] = adapter;
+            list.setAdapter(adapter);
             list.setOnItemClickListener(new AdapterView.OnItemClickListener() {
                 public void onItemClick(AdapterView<?> p, View view, int pos, long id) {
-                    Playback.get(host).play(songAdapter.items(), pos);
+                    Playback.get(host).play(adapter.items(), pos);
                 }
             });
             list.setOnItemLongClickListener(new AdapterView.OnItemLongClickListener() {
                 public boolean onItemLongClick(AdapterView<?> p, View view, int pos, long id) {
-                    TrackMenu.show(host, view, songAdapter.getItem(pos), 0, new TrackMenu.OnChanged() {
+                    TrackMenu.show(host, view, adapter.getItem(pos), 0, new TrackMenu.OnChanged() {
                         public void changed() {
                             rebuild();
                         }
@@ -222,14 +261,22 @@ public class LibraryPage extends Page implements MediaLibrary.Listener, Playback
                 break;
             }
             default: {
+                List<Track> source;
+                if (section == S_LIKED) {
+                    source = MediaLibrary.resolve(host, Db.get(host).favoriteKeys());
+                } else if (section == S_DOWNLOADED) {
+                    source = MediaLibrary.resolve(host, Downloads.get(host).keptKeys());
+                } else {
+                    source = songsInOrder(lib);
+                }
                 List<Track> list = new ArrayList<Track>();
-                for (Track t : lib.tracks()) {
+                for (Track t : source) {
                     if (matches(t.title) || matches(t.artist) || matches(t.album)) list.add(t);
                 }
-                sort(list, sortMode);
-                songAdapter.setItems(list);
+                TrackAdapter adapter = trackAdapters[section];
+                adapter.setItems(list);
                 Track cur = Playback.get(host).current();
-                songAdapter.setActiveKey(cur == null ? null : cur.key());
+                adapter.setActiveKey(cur == null ? null : cur.key());
                 count = list.size();
                 break;
             }
@@ -240,13 +287,18 @@ public class LibraryPage extends Page implements MediaLibrary.Listener, Playback
         View action = v.findViewById(R.id.empty_action);
         View progress = v.findViewById(R.id.progress);
 
-        boolean scanning = lib.isLoading();
+        boolean local = section <= S_FOLDERS;
+        boolean scanning = local && lib.isLoading();
         progress.setVisibility(scanning && count == 0 ? View.VISIBLE : View.GONE);
         emptyBox.setVisibility(count == 0 && !scanning ? View.VISIBLE : View.GONE);
         action.setVisibility(View.GONE);
 
         if (count == 0 && !scanning) {
-            if (noPermission) {
+            if (section == S_LIKED) {
+                empty.setText(query.length() > 0 ? R.string.empty_search : R.string.empty_favorites);
+            } else if (section == S_DOWNLOADED) {
+                empty.setText(query.length() > 0 ? R.string.empty_search : R.string.empty_downloads);
+            } else if (noPermission) {
                 empty.setText(R.string.perm_body);
                 android.widget.Button b = (android.widget.Button) action;
                 b.setText(R.string.perm_grant);
@@ -267,9 +319,18 @@ public class LibraryPage extends Page implements MediaLibrary.Listener, Playback
         }
     }
 
+    private List<Track> songsInOrder(MediaLibrary lib) {
+        if (sortedAs != sortMode || sortedSongs == null) {
+            sortedSongs = new ArrayList<Track>(lib.tracks());
+            sort(sortedSongs, sortMode);
+            sortedAs = sortMode;
+        }
+        return sortedSongs;
+    }
+
     private boolean matches(String value) {
         if (query.length() == 0) return true;
-        return value != null && value.toLowerCase(new Locale("tr", "TR")).contains(query);
+        return value != null && value.toLowerCase(TURKISH).contains(query);
     }
 
     static void sort(List<Track> list, final int mode) {
@@ -319,7 +380,9 @@ public class LibraryPage extends Page implements MediaLibrary.Listener, Playback
 
     @Override
     public void onSearch(String text) {
-        query = text.toLowerCase(new Locale("tr", "TR")).trim();
+        String next = text.toLowerCase(TURKISH).trim();
+        if (next.equals(query)) return;
+        query = next;
         rebuild();
     }
 
@@ -336,12 +399,16 @@ public class LibraryPage extends Page implements MediaLibrary.Listener, Playback
             m.add(Menu.NONE, SORT_ADDED, 4, R.string.sort_added);
             m.add(Menu.NONE, SORT_DURATION, 5, R.string.sort_duration);
         }
-        m.add(Menu.NONE, RESCAN, 6, R.string.rescan);
+        if (section <= S_FOLDERS) m.add(Menu.NONE, RESCAN, 6, R.string.rescan);
         menu.setOnMenuItemClickListener(new PopupMenu.OnMenuItemClickListener() {
             public boolean onMenuItemClick(MenuItem item) {
                 int id = item.getItemId();
                 if (id == SHUFFLE) {
-                    Playback.get(host).shuffleAll(MediaLibrary.get().tracks());
+                    // Shuffling what is on screen, so the loved and the kept shuffle among
+                    // themselves rather than dragging the whole device in.
+                    TrackAdapter adapter = trackAdapters[section];
+                    Playback.get(host).shuffleAll(adapter != null && section != S_SONGS
+                            ? adapter.items() : MediaLibrary.get().tracks());
                 } else if (id == RESCAN) {
                     MediaLibrary.get().load(host, true);
                     rebuild();
@@ -356,13 +423,18 @@ public class LibraryPage extends Page implements MediaLibrary.Listener, Playback
     }
 
     public void onLibraryChanged() {
+        sortedSongs = null;
         rebuild();
     }
 
     public void onTrackChanged(Track track) {
-        if (songAdapter != null) {
-            songAdapter.setActiveKey(track == null ? null : track.key());
+        for (TrackAdapter adapter : trackAdapters) {
+            if (adapter != null) adapter.setActiveKey(track == null ? null : track.key());
         }
+    }
+
+    public void onDownloadChanged(String videoId, boolean done) {
+        if (section == S_DOWNLOADED) rebuild();
     }
 
     public void onStateChanged(boolean playing, boolean buffering) {

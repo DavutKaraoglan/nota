@@ -11,6 +11,7 @@ import java.util.ArrayList;
 import java.util.Collections;
 import java.util.Comparator;
 import java.util.HashSet;
+import java.util.Iterator;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Locale;
@@ -127,7 +128,7 @@ public class Recommender {
             // Nothing on the device relates to this song, so any of it beats silence.
             for (Track t : MediaLibrary.get().tracks()) offer(pool, avoid, false, t, W_LAST_RESORT);
         }
-        return rank(app, db, pool, want);
+        return rank(app, db, pool, want, false);
     }
 
     private static List<Track> buildTaste(Context app, int want) {
@@ -141,7 +142,10 @@ public class Recommender {
 
         Map<String, Candidate> pool = new LinkedHashMap<String, Candidate>();
         for (Track seed : seeds) collect(app, db, seed, pool, avoid, online);
-        return rank(app, db, pool, want);
+        // A shelf is read as a list of names, so a second song by an artist already on it reads
+        // as an album track rather than as a suggestion. The queue can repeat an artist; this
+        // cannot.
+        return rank(app, db, pool, want, true);
     }
 
     /**
@@ -196,10 +200,17 @@ public class Recommender {
         }
     }
 
-    private static List<Track> rank(Context app, Db db, Map<String, Candidate> pool, int want) {
+    private static List<Track> rank(Context app, Db db, Map<String, Candidate> pool, int want,
+                                    boolean onePerArtist) {
         Map<String, Float> affinity = artistAffinity(app, db);
         Set<String> recent = new HashSet<String>(db.recentKeys(20));
+        Set<String> muted = Muted.keys(app);
         List<Candidate> ranked = new ArrayList<Candidate>(pool.values());
+        // Dropped here rather than where they were gathered: a muted name is a claim about what
+        // may be suggested, and this is the one place everything suggested passes through.
+        for (Iterator<Candidate> it = ranked.iterator(); it.hasNext(); ) {
+            if (muted.contains(artistKey(it.next().track))) it.remove();
+        }
         for (Candidate c : ranked) {
             Float a = affinity.get(artistKey(c.track));
             // Taste only tilts the order among songs that already answer the seed. Added on top
@@ -214,7 +225,7 @@ public class Recommender {
                 return Float.compare(y.score, x.score);
             }
         });
-        return spread(ranked, want);
+        return spread(ranked, want, onePerArtist);
     }
 
     private static void offer(Map<String, Candidate> pool, Set<String> avoid, boolean online,
@@ -284,13 +295,20 @@ public class Recommender {
         return TextUtils.isEmpty(t.artist) ? null : t.artist.toLowerCase(Locale.ROOT).trim();
     }
 
-    /** Takes the best entries while keeping one artist from filling the run. */
-    private static List<Track> spread(List<Candidate> ranked, int want) {
+    /**
+     * Takes the best entries while keeping one artist from filling the run, or from appearing
+     * twice at all where {@code onePerArtist} asks for it. A held-back candidate is only put back
+     * once the pool has nothing else to give, so the count asked for still arrives.
+     */
+    private static List<Track> spread(List<Candidate> ranked, int want, boolean onePerArtist) {
         List<Track> out = new ArrayList<Track>(want);
         List<Candidate> parked = new ArrayList<Candidate>();
+        Set<String> taken = new HashSet<String>();
         for (Candidate c : ranked) {
             if (out.size() >= want) break;
-            if (crowded(out, c.track)) parked.add(c);
+            String artist = artistKey(c.track);
+            boolean repeat = onePerArtist && artist != null && !taken.add(artist);
+            if (repeat || crowded(out, c.track)) parked.add(c);
             else out.add(c.track);
         }
         for (Candidate c : parked) {

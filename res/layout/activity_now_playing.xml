@@ -40,6 +40,35 @@
                         android:src="@drawable/ic_chevron_down"
                         android:scaleType="centerInside"
                         android:contentDescription="@string/close" />
+
+                    <View
+                        android:layout_width="0dp"
+                        android:layout_height="1dp"
+                        android:layout_weight="1" />
+
+                    <FrameLayout
+                        android:id="@+id/download_slot"
+                        android:layout_width="44dp"
+                        android:layout_height="44dp"
+                        android:visibility="gone">
+
+                        <ImageButton
+                            android:id="@+id/btn_download"
+                            android:layout_width="match_parent"
+                            android:layout_height="match_parent"
+                            android:background="?android:attr/selectableItemBackgroundBorderless"
+                            android:src="@drawable/ic_download"
+                            android:scaleType="centerInside"
+                            android:contentDescription="@string/download" />
+
+                        <ProgressBar
+                            android:id="@+id/download_busy"
+                            style="?android:attr/progressBarStyleSmall"
+                            android:layout_width="20dp"
+                            android:layout_height="20dp"
+                            android:layout_gravity="center"
+                            android:visibility="gone" />
+                    </FrameLayout>
                 </LinearLayout>
 
                 <FrameLayout
@@ -70,15 +99,6 @@
                         android:scrollbars="none"
                         android:clipToPadding="false" />
 
-                    <TextView
-                        android:id="@+id/lyrics_empty"
-                        android:layout_width="match_parent"
-                        android:layout_height="wrap_content"
-                        android:layout_gravity="center"
-                        android:visibility="gone"
-                        android:gravity="center"
-                        android:textSize="15sp"
-                        android:textColor="@color/text_secondary" />
                 </FrameLayout>
 
                 <LinearLayout
@@ -94,7 +114,7 @@
                         android:layout_width="match_parent"
                         android:layout_height="wrap_content"
                         android:layout_marginBottom="4dp"
-                        android:visibility="gone"
+                        android:visibility="invisible"
                         android:singleLine="true"
                         android:ellipsize="end"
                         android:textSize="15sp"

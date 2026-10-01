@@ -18,6 +18,7 @@ import com.nota.player.Playback;
 
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Map;
 
 /**
  * Everything played, newest first. A tab rather than a row inside the playlists screen: reaching
@@ -31,6 +32,7 @@ public class HistoryPage extends Page implements Playback.Listener, MediaLibrary
     private TrackAdapter adapter;
     private ListView list;
     private View emptyBox;
+    private boolean stale;
 
     @Override
     protected View onCreateView(LayoutInflater inflater, ViewGroup parent) {
@@ -76,7 +78,12 @@ public class HistoryPage extends Page implements Playback.Listener, MediaLibrary
 
     @Override
     public void onShow() {
-        reload();
+        if (stale) reload();
+    }
+
+    @Override
+    public void onOnline(boolean online) {
+        reloadWhenSeen();
     }
 
     @Override
@@ -85,13 +92,38 @@ public class HistoryPage extends Page implements Playback.Listener, MediaLibrary
         MediaLibrary.get().removeListener(this);
     }
 
+    private void reloadWhenSeen() {
+        if (!visible()) {
+            stale = true;
+            return;
+        }
+        reload();
+    }
+
     private void reload() {
         if (adapter == null) return;
-        List<Track> items = MediaLibrary.resolve(host, Db.get(host).recentKeys(MAX));
+        stale = false;
+        Map<String, Long> played = Db.get(host).recentPlays(MAX);
+        List<Track> items = MediaLibrary.resolve(host,
+                new ArrayList<String>(played.keySet()));
         adapter.setItems(items);
+        adapter.setHeadings(days(items, played));
         Track cur = Playback.get(host).current();
         adapter.setActiveKey(cur == null ? null : cur.key());
         emptyBox.setVisibility(items.isEmpty() ? View.VISIBLE : View.GONE);
+    }
+
+    /** The day a song was last played, said only once per day it opens. */
+    private List<String> days(List<Track> items, Map<String, Long> played) {
+        List<String> out = new ArrayList<String>();
+        String last = null;
+        for (Track t : items) {
+            Long at = played.get(t.key());
+            String day = at == null ? null : Ui.day(host, at);
+            out.add(day != null && !day.equals(last) ? day : null);
+            if (day != null) last = day;
+        }
+        return out;
     }
 
     @Override
@@ -126,7 +158,7 @@ public class HistoryPage extends Page implements Playback.Listener, MediaLibrary
         if (adapter == null) return;
         adapter.setActiveKey(track == null ? null : track.key());
         // A song starting is exactly what puts a new name at the top of this list.
-        reload();
+        reloadWhenSeen();
     }
 
     public void onStateChanged(boolean playing, boolean buffering) {
@@ -136,6 +168,6 @@ public class HistoryPage extends Page implements Playback.Listener, MediaLibrary
     }
 
     public void onLibraryChanged() {
-        reload();
+        reloadWhenSeen();
     }
 }

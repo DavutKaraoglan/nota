@@ -14,6 +14,7 @@ import android.os.Build;
 import android.os.Handler;
 import android.os.Looper;
 import android.os.PowerManager;
+import android.os.SystemClock;
 import android.provider.MediaStore;
 
 import com.nota.data.CrashLog;
@@ -95,6 +96,9 @@ public class Playback implements MediaPlayer.OnCompletionListener,
     private boolean servedFromCache;
     /** The track the player is on, held back so the next open can score the one it replaces. */
     private Track opened;
+    /** How long the open track has sounded, and when its current run of sounding began. */
+    private long heardMs;
+    private long heardSince;
     /** The track a recommendation batch was last asked for, so the tail is only extended once. */
     private String extendedFrom;
     private boolean extending;
@@ -142,8 +146,25 @@ public class Playback implements MediaPlayer.OnCompletionListener,
     // ---- state ----
 
     public Track current() {
-        if (orderPos < 0 || orderPos >= order.size()) return null;
-        int i = order.get(orderPos);
+        return at(orderPos);
+    }
+
+    /** The song a step away in the order, without moving to it, so a screen can show it arriving. */
+    public Track peekNext() {
+        if (order.isEmpty()) return null;
+        return at(orderPos + 1 < order.size() ? orderPos + 1 : 0);
+    }
+
+    public Track peekPrevious() {
+        if (order.isEmpty()) return null;
+        if (position() > 3000) return current();
+        if (orderPos > 0) return at(orderPos - 1);
+        return at(repeat == REPEAT_ALL ? order.size() - 1 : orderPos);
+    }
+
+    private Track at(int pos) {
+        if (pos < 0 || pos >= order.size()) return null;
+        int i = order.get(pos);
         return i >= 0 && i < queue.size() ? queue.get(i) : null;
     }
 
@@ -336,7 +357,7 @@ public class Playback implements MediaPlayer.OnCompletionListener,
             openCurrent(true);
             return;
         }
-        playing = true;
+        setPlaying(true);
         playWhenReady = true;
         registerNoisy();
         PlayerService.start(app);
@@ -352,7 +373,10 @@ public class Playback implements MediaPlayer.OnCompletionListener,
             }
         }
         if (playing) {
-            playing = false;
+            setPlaying(false);
+            // Written out here as well as at the end of a song: a paused player is what the
+            // system kills first, and an unwritten tally dies with it.
+            flushHeard(opened);
             fireState();
         }
         unregisterNoisy();
@@ -362,7 +386,7 @@ public class Playback implements MediaPlayer.OnCompletionListener,
         closeOut(null);
         extendedFrom = null;
         playWhenReady = false;
-        playing = false;
+        setPlaying(false);
         prepared = false;
         buffering = false;
         releasePlayer();
@@ -384,7 +408,7 @@ public class Playback implements MediaPlayer.OnCompletionListener,
             orderPos = 0;
         } else {
             orderPos = 0;
-            playing = false;
+            setPlaying(false);
             openCurrent(false);
             return;
         }
@@ -415,6 +439,40 @@ public class Playback implements MediaPlayer.OnCompletionListener,
     // ---- engine ----
 
     /**
+     * The one seam where playback starts or stops sounding, so listening can be timed against
+     * the clock. A play count cannot stand in for it: a song left after ten seconds would
+     * otherwise be worth as much as one heard through.
+     */
+    private void setPlaying(boolean value) {
+        if (playing == value) return;
+        playing = value;
+        if (value) heardSince = SystemClock.elapsedRealtime();
+        else bankHeard(false);
+    }
+
+    /** Closes the run of sounding that is open, carrying on from now if the song still plays. */
+    private void bankHeard(boolean running) {
+        if (heardSince == 0) return;
+        heardMs += SystemClock.elapsedRealtime() - heardSince;
+        heardSince = running ? SystemClock.elapsedRealtime() : 0;
+    }
+
+    /** Hands the outgoing track's listening to the store and starts the tally over. */
+    private void flushHeard(Track done) {
+        bankHeard(playing);
+        if (done != null && heardMs >= 1000) {
+            final String key = done.key();
+            final long listened = heardMs;
+            Db.background(new Runnable() {
+                public void run() {
+                    Db.get(app).addListened(key, listened);
+                }
+            });
+        }
+        heardMs = 0;
+    }
+
+    /**
      * Scores the outgoing track, while its player is still alive enough to say how far it got.
      * A position of zero means the track never really started — a failed stream rather than a
      * rejected song — so it is left unscored.
@@ -422,6 +480,7 @@ public class Playback implements MediaPlayer.OnCompletionListener,
     private void closeOut(Track next) {
         Track done = opened;
         opened = null;
+        flushHeard(done);
         if (done == null) return;
         long pos = 0, dur = 0;
         try {
@@ -503,20 +562,34 @@ public class Playback implements MediaPlayer.OnCompletionListener,
         if (YtApi.isYouTube(current()) && waited > SLOW_START_MS) {
             CrashLog.note(app, "yt wait " + waited + "ms"
                     + (servedFromCache ? " (cached)" : " (fetched)"));
+            // Handed over on the spot: a start slow enough to be felt is worth reading before
+            // the next launch, and the notes that explain it are already in the same file.
+            CrashLog.exportPending(app);
         }
         Fx.get(app).attach(audioSessionId);
         if (playWhenReady && requestFocus()) {
             try {
                 player.start();
-                playing = true;
+                setPlaying(true);
                 registerNoisy();
             } catch (IllegalStateException ignored) {
             }
         }
-        Track t = current();
-        if (t != null) Db.get(app).recordPlay(t);
+        final Track t = current();
+        if (t != null) {
+            Db.background(new Runnable() {
+                public void run() {
+                    Db.get(app).recordPlay(t);
+                    main.post(new Runnable() {
+                        public void run() {
+                            fireTrack();
+                        }
+                    });
+                }
+            });
+        }
         maybeExtend();
-        Prefetch.get(app).warm(upcoming(4));
+        Prefetch.get(app).around(peekNext(), peekPrevious(), upcoming(4));
         fireTrack();
         fireState();
     }
@@ -541,7 +614,7 @@ public class Playback implements MediaPlayer.OnCompletionListener,
                 // was asked for; a skip in the meantime deserves a fresh question.
                 if (tracks.isEmpty() || now == null || !seed.key().equals(now.key())) return;
                 addToQueue(tracks);
-                Prefetch.get(app).warm(upcoming(4));
+                Prefetch.get(app).around(peekNext(), peekPrevious(), upcoming(4));
             }
         });
     }
@@ -551,6 +624,7 @@ public class Playback implements MediaPlayer.OnCompletionListener,
         // and a finished song is the one signal worth never losing.
         Track done = opened;
         opened = null;
+        flushHeard(done);
         if (done != null) {
             Signals.get(app).ended(done, 1f, repeat == REPEAT_ONE ? done : null);
         }
@@ -566,7 +640,7 @@ public class Playback implements MediaPlayer.OnCompletionListener,
             orderPos = 0;
             openCurrent(true);
         } else {
-            playing = false;
+            setPlaying(false);
             playWhenReady = false;
             unregisterNoisy();
             fireState();
@@ -592,11 +666,13 @@ public class Playback implements MediaPlayer.OnCompletionListener,
             CrashLog.note(app, "yt play failed what=" + what + " extra=" + extra);
             CrashLog.exportPending(app);
         }
-        // A stream that died says nothing about taste, so the track leaves unscored.
+        // A stream that died says nothing about taste, so the track leaves unscored — but
+        // whatever sounded before it broke was still listened to.
+        flushHeard(opened);
         opened = null;
         prepared = false;
         buffering = false;
-        playing = false;
+        setPlaying(false);
         releasePlayer();
         unregisterNoisy();
         fireState();
@@ -685,8 +761,12 @@ public class Playback implements MediaPlayer.OnCompletionListener,
 
     private void registerNoisy() {
         if (!noisyRegistered) {
-            app.registerReceiver(noisyReceiver,
-                    new IntentFilter(AudioManager.ACTION_AUDIO_BECOMING_NOISY));
+            IntentFilter filter = new IntentFilter(AudioManager.ACTION_AUDIO_BECOMING_NOISY);
+            if (Build.VERSION.SDK_INT >= 33) {
+                app.registerReceiver(noisyReceiver, filter, Context.RECEIVER_NOT_EXPORTED);
+            } else {
+                app.registerReceiver(noisyReceiver, filter);
+            }
             noisyRegistered = true;
         }
     }

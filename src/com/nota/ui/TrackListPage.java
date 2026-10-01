@@ -183,6 +183,14 @@ public class TrackListPage extends Page implements Playback.Listener, MediaLibra
     }
 
     @Override
+    public void onOnline(boolean online) {
+        // A radio that came back empty because nothing could be reached is worth asking for
+        // again; one that answered is still the answer.
+        if (online && mix != null && mix.isEmpty()) mix = null;
+        reload();
+    }
+
+    @Override
     public void onDestroy() {
         Playback.get(host).removeListener(this);
         MediaLibrary.get().removeListener(this);

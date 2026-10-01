@@ -1,19 +1,21 @@
 package com.nota.ui;
 
-import android.graphics.drawable.GradientDrawable;
 import android.text.TextUtils;
 import android.view.LayoutInflater;
 import android.view.View;
 import android.view.ViewGroup;
 import android.widget.ImageView;
 import android.widget.LinearLayout;
+import android.widget.ScrollView;
 import android.widget.TextView;
 
 import com.nota.R;
 import com.nota.data.ArtLoader;
+import com.nota.data.Connectivity;
 import com.nota.data.Db;
 import com.nota.data.Follows;
 import com.nota.data.MediaLibrary;
+import com.nota.data.Muted;
 import com.nota.data.Recommender;
 import com.nota.data.YtApi;
 import com.nota.model.Track;
@@ -33,14 +35,20 @@ import java.util.Set;
 public class HomePage extends Page implements MediaLibrary.Listener, Playback.Listener {
 
     private static final int SHELF = 5;
+    /** How many shelves deep the suggestions go, since they are turned rather than scrolled. */
+    private static final int FOR_YOU_PAGES = 3;
     private static final int SLIDER = 12;
     /** A mood is the only thing on the screen when it is picked, so it is worth more rows. */
     private static final int MOOD = 20;
+    private static final int MOOD_ARTISTS = 3;
     private static final int MIXES = 8;
+    /** How many loved artists the new-releases row asks after. */
+    private static final int FRESH_ARTISTS = 3;
     /** How many favourites have to change before the suggestions are worth asking for again. */
     private static final int TASTE = 5;
 
     private LinearLayout sections;
+    private ScrollView scroll;
     private View empty;
 
     /** What the recommender last answered, kept so returning to this screen costs nothing. */
@@ -48,9 +56,9 @@ public class HomePage extends Page implements MediaLibrary.Listener, Playback.Li
     private String askedFor;
     private boolean asking;
 
-    /** The newest release by the artist at the head of the row, and whose it is. */
+    /** What the loved artists have just put out, and which names that answer was for. */
     private List<Track> fresh = new ArrayList<Track>();
-    private String freshArtist;
+    private String freshFor;
     private String askingFresh;
 
     /** The mood on the chips, or null while home is about the listener's own playing. */
@@ -61,6 +69,8 @@ public class HomePage extends Page implements MediaLibrary.Listener, Playback.Li
     private List<Track> moodTracks = new ArrayList<Track>();
     /** The Db revision the shelves on screen were built from. -1 until they exist at all. */
     private int builtAt = -1;
+    private String playedFrom;
+
 
     @Override
     protected View onCreateView(LayoutInflater inflater, ViewGroup parent) {
@@ -70,6 +80,12 @@ public class HomePage extends Page implements MediaLibrary.Listener, Playback.Li
         root.findViewById(R.id.btn_search).setOnClickListener(new View.OnClickListener() {
             public void onClick(View v) {
                 host.openDiscoverSearch();
+            }
+        });
+        scroll = (ScrollView) root.findViewById(R.id.home_scroll);
+        scroll.setOnScrollChangeListener(new View.OnScrollChangeListener() {
+            public void onScrollChange(View v, int x, int y, int oldX, int oldY) {
+                host.setTintScroll(y);
             }
         });
         MediaLibrary.get().addListener(this);
@@ -93,13 +109,26 @@ public class HomePage extends Page implements MediaLibrary.Listener, Playback.Li
     public void onShow() {
         // Rebuilding the shelves means a round of queries and a fresh set of views; coming back
         // from another tab without having played or favourited anything earns none of that.
-        if (Db.get(host).revision() != builtAt) refresh();
+        Db db = Db.get(host);
+        if (db.revision() != builtAt || !listenedTo(db).equals(playedFrom)) refresh();
         loadTint();
     }
 
     @Override
     public void onHide() {
         host.setTint(null);
+    }
+
+    @Override
+    public void onOnline(boolean online) {
+        // Only what the outage left empty is forgotten: a shelf that was answered is still the
+        // answer, and asking for it again would cost the same request twice.
+        if (online) {
+            if (moodTracks.isEmpty()) moodShown = null;
+            if (fresh.isEmpty()) freshFor = null;
+            if (forYou.isEmpty()) askedFor = null;
+        }
+        refresh();
     }
 
     public void onLibraryChanged() {
@@ -118,26 +147,33 @@ public class HomePage extends Page implements MediaLibrary.Listener, Playback.Li
 
     /**
      * The song being played colours the top of the screen, the way the player screen does. The
-     * wash belongs to the window, not this view, so it runs behind the top bar as one gradient.
+     * wash belongs to the window, not this view, so it runs behind the top bar as one band —
+     * and this page drags it along as it scrolls, so the colour stays the header's own.
      */
     private void loadTint() {
+        if (!visible()) return;
         final Track t = Playback.get(host).current();
         if (t == null) {
-            host.setTint(null);
+            paint(0);
             return;
         }
         Ui.coverColor(host, t, new Ui.ColorCallback() {
             public void onColor(int colour) {
-                if (sections == null || Playback.get(host).current() != t) return;
-                if (colour == 0) {
-                    host.setTint(null);
-                    return;
-                }
-                int rgb = colour & 0xFFFFFF;
-                host.setTint(new GradientDrawable(GradientDrawable.Orientation.TOP_BOTTOM,
-                        new int[]{0x73000000 | rgb, 0x2E000000 | rgb, rgb & 0xFFFFFF}));
+                if (sections == null || !visible() || Playback.get(host).current() != t) return;
+                paint(colour);
             }
         });
+    }
+
+    private void paint(int colour) {
+        host.setHeaderTint(colour);
+        // Painting starts the wash back at the top of the window, where the header is only if
+        // the page has not been scrolled.
+        if (scroll != null) host.setTintScroll(scroll.getScrollY());
+    }
+
+    private String listenedTo(Db db) {
+        return db.mostPlayedKeys(SLIDER) + "|" + db.recentKeys(SHELF);
     }
 
     private void refresh() {
@@ -145,35 +181,45 @@ public class HomePage extends Page implements MediaLibrary.Listener, Playback.Li
         sections.removeAllViews();
         Db db = Db.get(host);
         builtAt = db.revision();
+        playedFrom = listenedTo(db);
 
-        addMoods();
+        // Offline the catalogue half of this screen is a row of things a tap cannot open, so
+        // the page falls back to what the phone is already holding.
+        boolean online = Connectivity.isOnline(host);
+        if (online) addMoods();
         // The mood row stands whether or not anything has been listened to, so the "nothing
         // here yet" message counts the shelves that came after it rather than the whole column.
         int beforeShelves = sections.getChildCount();
 
-        if (mood != null) {
+        if (online && mood != null) {
             // A picked mood is the subject of the page, and the listener's own shelves would
             // only bury it. The row above is still there to put them back.
             addMood();
         } else {
             askForYou(db);
-            List<Track> faces = artistFaces(db);
-            askForFresh(faces);
-
-            addShelf(host.getString(R.string.new_releases), fresh, 1, null);
+            List<Track> faces = online ? artistFaces(db) : new ArrayList<Track>();
+            if (online) {
+                askForFresh(faces, db);
+                addShelf(host.getString(R.string.new_releases), fresh, 1, null);
+            }
 
             List<Track> played = MediaLibrary.resolve(host, db.mostPlayedKeys(SLIDER));
             addSlider(R.string.on_repeat, played,
                     TrackListPage.mostPlayed(host.getString(R.string.on_repeat)));
 
-            addShelf(host.getString(R.string.for_you), forYou, SHELF, null);
+            addPagedShelf(host.getString(R.string.for_you),
+                    MediaLibrary.playableOnly(host, forYou), SHELF, FOR_YOU_PAGES);
 
             // Built from what has actually been played first, and from the suggestions only where
             // the listening runs out: a compilation is worth more when its starting point is one
             // of theirs.
-            List<Track> seedPool = new ArrayList<Track>(played);
-            seedPool.addAll(forYou);
-            addMixes(host.getString(R.string.mixes_for_you), seedPool);
+            // A mix is a card that stands for a search made when it is opened, so it has nothing
+            // to give offline however local its starting point is.
+            if (online) {
+                List<Track> seedPool = new ArrayList<Track>(played);
+                seedPool.addAll(forYou);
+                addMixes(host.getString(R.string.mixes_for_you), seedPool);
+            }
 
             addArtists(faces);
 
@@ -238,7 +284,7 @@ public class HomePage extends Page implements MediaLibrary.Listener, Playback.Li
         final String want = mood;
         if (want.equals(asked)) return;
         asked = want;
-        YtApi.search(host, want + " " + host.getString(R.string.mood_query),
+        YtApi.mood(host, want, want + " " + host.getString(R.string.mood_query), moodArtists(),
                 new YtApi.TrackCallback() {
                     public void onTracks(List<Track> tracks) {
                         deliverMood(want, tracks);
@@ -250,6 +296,27 @@ public class HomePage extends Page implements MediaLibrary.Listener, Playback.Li
                         deliverMood(want, new ArrayList<Track>());
                     }
                 });
+    }
+
+    /**
+     * The names the mood is asked about as well as the mood itself. Who has actually been played
+     * comes first — a mood is meant to sound like their own music in that mood — and a followed
+     * name only fills in behind. Few of them: each one is a search of its own, and past a handful
+     * the shelf stops being about the mood at all.
+     */
+    private List<String> moodArtists() {
+        Db db = Db.get(host);
+        List<Track> sources = new ArrayList<Track>(db.topArtists(MOOD_ARTISTS));
+        sources.addAll(artistFaces(db));
+        List<String> names = new ArrayList<String>();
+        Set<String> seen = new HashSet<String>(Muted.keys(host));
+        for (Track t : sources) {
+            if (TextUtils.isEmpty(t.artist)) continue;
+            if (!seen.add(t.artist.toLowerCase(Locale.ROOT))) continue;
+            names.add(t.artist);
+            if (names.size() == MOOD_ARTISTS) break;
+        }
+        return names;
     }
 
     private void deliverMood(String want, List<Track> tracks) {
@@ -272,33 +339,55 @@ public class HomePage extends Page implements MediaLibrary.Listener, Playback.Li
     }
 
     /**
-     * What the artist at the head of the row has just put out. One artist and one song: a shelf
-     * of everything new by everyone would be a second discover page, and this is meant to be the
-     * one line that says a favourite has released something since the last look.
+     * What the loved artists have just put out, one song each. A handful of artists rather than
+     * all of them: a shelf of everything new by everyone would be a second discover page, and
+     * this is meant to be the line that says a favourite has released something since the last
+     * look. Artists with nothing recent drop out, so the row is sometimes short and sometimes
+     * not there at all — which is the point of it.
      */
-    private void askForFresh(List<Track> faces) {
-        if (faces.isEmpty()) return;
-        final String who = faces.get(0).artist;
-        if (TextUtils.isEmpty(who) || who.equals(freshArtist) || who.equals(askingFresh)) return;
-        askingFresh = who;
-        YtApi.latestRelease(host, who, new YtApi.TrackCallback() {
+    private void askForFresh(List<Track> faces, Db db) {
+        final List<String> who = freshArtists(faces, db);
+        if (who.isEmpty()) return;
+        final String asking = TextUtils.join("\n", who);
+        if (asking.equals(freshFor) || asking.equals(askingFresh)) return;
+        askingFresh = asking;
+        YtApi.latestReleases(host, who, new YtApi.TrackCallback() {
             public void onTracks(List<Track> tracks) {
-                deliverFresh(who, tracks);
+                deliverFresh(asking, tracks);
             }
 
             public void onError() {
-                // Kept as an empty answer: an artist the catalogue cannot place should cost one
+                // Kept as an empty answer: names the catalogue cannot place should cost one
                 // question a session, not one per round.
-                deliverFresh(who, new ArrayList<Track>());
+                deliverFresh(asking, new ArrayList<Track>());
             }
         });
     }
 
-    private void deliverFresh(String who, List<Track> tracks) {
+    /**
+     * The names worth asking after. The artist played most often leads however the row above is
+     * ordered: a followed artist is a standing interest, but the one on repeat is the one whose
+     * new song the listener would want to be told about first.
+     */
+    private List<String> freshArtists(List<Track> faces, Db db) {
+        List<String> who = new ArrayList<String>();
+        Set<String> seen = new HashSet<String>();
+        List<Track> sources = new ArrayList<Track>(db.topArtists(1));
+        sources.addAll(faces);
+        for (Track t : sources) {
+            if (TextUtils.isEmpty(t.artist)) continue;
+            if (!seen.add(t.artist.toLowerCase(Locale.ROOT))) continue;
+            who.add(t.artist);
+            if (who.size() == FRESH_ARTISTS) break;
+        }
+        return who;
+    }
+
+    private void deliverFresh(String asking, List<Track> tracks) {
         if (sections == null) return;
-        if (who.equals(askingFresh)) askingFresh = null;
+        if (asking.equals(askingFresh)) askingFresh = null;
         fresh = tracks;
-        freshArtist = who;
+        freshFor = asking;
         refresh();
     }
 
@@ -311,7 +400,7 @@ public class HomePage extends Page implements MediaLibrary.Listener, Playback.Li
         if (asking || taste.length() == 0 || taste.equals(askedFor)) return;
         asking = true;
         askedFor = taste;
-        Recommender.forTaste(host, SLIDER, new Recommender.Callback() {
+        Recommender.forTaste(host, SHELF * FOR_YOU_PAGES, new Recommender.Callback() {
             public void onTracks(List<Track> tracks) {
                 asking = false;
                 if (tracks.isEmpty() || sections == null) return;
@@ -417,7 +506,8 @@ public class HomePage extends Page implements MediaLibrary.Listener, Playback.Li
     /** Subscriptions lead the row; behind them come the artists with the most listening. */
     private List<Track> artistFaces(Db db) {
         List<Track> faces = new ArrayList<Track>();
-        Set<String> seen = new HashSet<String>();
+        // A muted name starts out as one the row has already shown, which is how it never does.
+        Set<String> seen = new HashSet<String>(Muted.keys(host));
         for (String name : Follows.all(host)) {
             List<Track> known = db.onlineByArtist(name, 1);
             if (!known.isEmpty() && seen.add(name.toLowerCase(Locale.ROOT))) {
@@ -479,22 +569,51 @@ public class HomePage extends Page implements MediaLibrary.Listener, Playback.Li
         LinearLayout rows = (LinearLayout) shelf.findViewById(R.id.section_rows);
         TrackAdapter adapter = new TrackAdapter(host, shown);
         for (int i = 0; i < shown.size(); i++) {
-            final int index = i;
-            View row = adapter.getView(i, null, rows);
-            row.setOnClickListener(new View.OnClickListener() {
-                public void onClick(View v) {
-                    Playback.get(host).playSingle(shown.get(index));
-                }
-            });
-            row.setOnLongClickListener(new View.OnLongClickListener() {
-                public boolean onLongClick(View v) {
-                    TrackMenu.show(host, v, shown.get(index), 0, null);
-                    return true;
-                }
-            });
-            rows.addView(row);
+            rows.addView(trackRow(adapter, shown, i, rows));
         }
         sections.addView(shelf);
+    }
+
+    /**
+     * A shelf deep enough to be turned rather than scrolled past. Suggestions are worth more
+     * than the five rows a shelf can spare, but laying fifteen out in a column would push the
+     * rest of the page under the listener's thumb.
+     */
+    private void addPagedShelf(CharSequence title, List<Track> tracks, int rows, int pages) {
+        if (tracks.isEmpty()) return;
+        final List<Track> shown = tracks.subList(0, Math.min(rows * pages, tracks.size()));
+        View shelf = LayoutInflater.from(host).inflate(
+                R.layout.item_home_pager, sections, false);
+        ((TextView) shelf.findViewById(R.id.section_title)).setText(title);
+
+        LinearLayout strip = (LinearLayout) shelf.findViewById(R.id.pager_row);
+        TrackAdapter adapter = new TrackAdapter(host, shown);
+        for (int start = 0; start < shown.size(); start += rows) {
+            LinearLayout page = new LinearLayout(host);
+            page.setOrientation(LinearLayout.VERTICAL);
+            for (int i = start; i < Math.min(start + rows, shown.size()); i++) {
+                page.addView(trackRow(adapter, shown, i, page));
+            }
+            strip.addView(page);
+        }
+        sections.addView(shelf);
+    }
+
+    private View trackRow(TrackAdapter adapter, final List<Track> shown, final int index,
+                          ViewGroup parent) {
+        View row = adapter.getView(index, null, parent);
+        row.setOnClickListener(new View.OnClickListener() {
+            public void onClick(View v) {
+                Playback.get(host).playSingle(shown.get(index));
+            }
+        });
+        row.setOnLongClickListener(new View.OnLongClickListener() {
+            public boolean onLongClick(View v) {
+                TrackMenu.show(host, v, shown.get(index), 0, null);
+                return true;
+            }
+        });
+        return row;
     }
 
     @Override

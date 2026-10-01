@@ -23,6 +23,7 @@ import com.nota.data.Db;
 import com.nota.data.Signals;
 import com.nota.model.Track;
 import com.nota.ui.MainActivity;
+import com.nota.ui.Ui;
 
 /** Keeps playback alive in the background and mirrors it into a MediaStyle notification. */
 public class PlayerService extends Service implements Playback.Listener {
@@ -60,6 +61,12 @@ public class PlayerService extends Service implements Playback.Listener {
 
     public static void stop(Context c) {
         c.stopService(new Intent(c, PlayerService.class));
+    }
+
+    /** The notification is the app on the lock screen, so it is worded in the chosen language. */
+    @Override
+    protected void attachBaseContext(Context base) {
+        super.attachBaseContext(Ui.chosen(base));
     }
 
     @Override

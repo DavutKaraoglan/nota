@@ -7,7 +7,12 @@
     <dimen name="topbar_height">56dp</dimen>
     <dimen name="tabbar_height">58dp</dimen>
     <dimen name="mini_height">72dp</dimen>
+    <dimen name="offline_bar_height">24dp</dimen>
     <dimen name="art_radius">8dp</dimen>
+    <!-- How far the colour or picture behind a page reaches down from the top of the window. -->
+    <dimen name="wash_height">420dp</dimen>
+    <!-- How far the header's colour takes to let go of the page below it. -->
+    <dimen name="wash_fade">160dp</dimen>
     <dimen name="icon">24dp</dimen>
     <dimen name="text_title">15sp</dimen>
     <dimen name="text_sub">13sp</dimen>

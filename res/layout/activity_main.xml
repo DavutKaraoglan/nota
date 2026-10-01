@@ -14,10 +14,11 @@
     <View
         android:id="@+id/tint"
         android:layout_width="match_parent"
-        android:layout_height="320dp"
+        android:layout_height="@dimen/wash_height"
         android:layout_gravity="top" />
 
     <LinearLayout
+        android:id="@+id/column"
         android:layout_width="match_parent"
         android:layout_height="match_parent"
         android:orientation="vertical">
@@ -99,6 +100,17 @@
                     android:scaleType="centerInside"
                     android:contentDescription="@string/sort_by" />
             </LinearLayout>
+
+            <!-- Says why the catalogue has gone quiet, without taking a row from the page. -->
+            <TextView
+                android:id="@+id/offline_bar"
+                android:layout_width="match_parent"
+                android:layout_height="@dimen/offline_bar_height"
+                android:visibility="gone"
+                android:gravity="center"
+                android:textSize="12sp"
+                android:textColor="@color/text_secondary"
+                android:text="@string/offline" />
 
             <FrameLayout
                 android:id="@+id/content"

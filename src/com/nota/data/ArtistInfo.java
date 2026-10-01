@@ -52,17 +52,23 @@ public class ArtistInfo {
         }, "nota-artist-info").start();
     }
 
-    private static String fetch(String artist) throws Exception {
+    /** The record behind a name, or null where the search is only guessing at it. */
+    static JSONObject search(String artist) throws Exception {
         // The name comes from a file tag, and a quote or a backslash in it would end the
         // quoted term and let the rest of the tag act as search syntax.
         String term = artist.replaceAll("[\"\\\\]", " ").trim();
-        if (term.length() == 0) return "";
+        if (term.length() == 0) return null;
         String url = "https://musicbrainz.org/ws/2/artist?fmt=json&limit=1&query="
                 + java.net.URLEncoder.encode("artist:\"" + term + "\"", "UTF-8");
         JSONArray found = new JSONObject(Net.get(url, TIMEOUT_MS)).optJSONArray("artists");
-        if (found == null || found.length() == 0) return "";
+        if (found == null || found.length() == 0) return null;
         JSONObject a = found.getJSONObject(0);
-        if (a.optInt("score") < MIN_SCORE) return "";
+        return a.optInt("score") < MIN_SCORE ? null : a;
+    }
+
+    private static String fetch(String artist) throws Exception {
+        JSONObject a = search(artist);
+        if (a == null) return "";
 
         StringBuilder out = new StringBuilder();
         String name = a.optString("name", artist);

@@ -1,6 +1,24 @@
 <?xml version="1.0" encoding="utf-8"?>
 <LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
     android:layout_width="match_parent"
+    android:layout_height="wrap_content"
+    android:orientation="vertical">
+
+    <TextView
+        android:id="@+id/day"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:visibility="gone"
+        android:paddingStart="@dimen/gutter"
+        android:paddingEnd="@dimen/gutter"
+        android:paddingTop="16dp"
+        android:paddingBottom="6dp"
+        android:singleLine="true"
+        android:textSize="@dimen/text_sub"
+        android:textColor="@color/text_secondary" />
+
+    <LinearLayout
+    android:layout_width="match_parent"
     android:layout_height="@dimen/row_height"
     android:orientation="horizontal"
     android:gravity="center_vertical"
@@ -76,4 +94,5 @@
         android:layout_marginStart="10dp"
         android:textSize="12sp"
         android:textColor="@color/text_secondary" />
+    </LinearLayout>
 </LinearLayout>

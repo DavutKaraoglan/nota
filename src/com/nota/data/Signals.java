@@ -76,12 +76,21 @@ public class Signals {
             score = -5;
         }
 
-        Db db = Db.get(app);
-        db.recordEvent(key, kind, score);
+        final int eventKind = kind;
+        final int eventScore = score;
+        final String heardKey = key;
         // A pairing is judged by how its second song was received, which is only known now.
-        if (previousKey != null && !previousKey.equals(key)) {
-            db.bumpTransition(previousKey, key, score > 0 ? 1 : -1);
-        }
+        final String pairedWith =
+                previousKey != null && !previousKey.equals(key) ? previousKey : null;
+        Db.background(new Runnable() {
+            public void run() {
+                Db db = Db.get(app);
+                db.recordEvent(heardKey, eventKind, eventScore);
+                if (pairedWith != null) {
+                    db.bumpTransition(pairedWith, heardKey, eventScore > 0 ? 1 : -1);
+                }
+            }
+        });
         previousKey = key;
     }
 }

@@ -1,0 +1,16 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  Nothing may answer in the clear. Songs, covers and words are fetched from hosts a public
+  authority already vouches for, so no certificate has to be trusted by hand here.
+-->
+<network-security-config>
+    <base-config cleartextTrafficPermitted="false" />
+    <!--
+      Except to the app itself. The player reads remote songs through a proxy the app runs on
+      the loopback address, which never leaves the device, and TLS there would mean trusting a
+      certificate the app both issues and checks.
+    -->
+    <domain-config cleartextTrafficPermitted="true">
+        <domain includeSubdomains="false">127.0.0.1</domain>
+    </domain-config>
+</network-security-config>

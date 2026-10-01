@@ -298,20 +298,45 @@ public class MediaLibrary {
         this.byKey = keyMap;
     }
 
-    /** Turns stored track keys back into tracks, dropping entries that no longer exist. */
+    /**
+     * Whether a song can be opened as things stand. Offline that means the phone already holds
+     * it: a download, or a stream whose bytes are still in the cache.
+     */
+    public static boolean playable(Context context, Track t, boolean online) {
+        if (online || !t.isRemote()) return true;
+        String id = YtApi.videoId(t);
+        return id != null && StreamProxy.cached(context, id);
+    }
+
+    /** The same list without the songs a tap could not open. */
+    public static List<Track> playableOnly(Context context, List<Track> tracks) {
+        boolean online = Connectivity.isOnline(context);
+        if (online) return tracks;
+        List<Track> out = new ArrayList<Track>();
+        for (Track t : tracks) {
+            if (playable(context, t, false)) out.add(t);
+        }
+        return out;
+    }
+
+    /**
+     * Turns stored track keys back into tracks, dropping entries that no longer exist — and,
+     * offline, the ones that exist only on the other side of the connection.
+     */
     public static List<Track> resolve(Context context, List<String> keys) {
         List<Track> out = new ArrayList<Track>();
         MediaLibrary lib = get();
+        boolean online = Connectivity.isOnline(context);
         Set<String> onlineIds = new HashSet<String>();
         for (String key : keys) {
             if (key.startsWith("o:")) onlineIds.add(key.substring(2));
         }
-        Map<String, Track> online = onlineIds.isEmpty()
+        Map<String, Track> remote = onlineIds.isEmpty()
                 ? Collections.<String, Track>emptyMap()
                 : Db.get(context).online(onlineIds);
         for (String key : keys) {
-            Track t = key.startsWith("o:") ? online.get(key.substring(2)) : lib.byKey(key);
-            if (t != null) out.add(t);
+            Track t = key.startsWith("o:") ? remote.get(key.substring(2)) : lib.byKey(key);
+            if (t != null && playable(context, t, online)) out.add(t);
         }
         return out;
     }

@@ -23,10 +23,14 @@ public class DiskCache {
             DataSaver.get(app).hit(f);
             return body;
         }
+        boolean nothingThere = false;
         for (String url : urls) {
             String fresh;
             try {
                 fresh = Net.get(url, 15000);
+            } catch (Net.NotFound e) {
+                nothingThere = true;
+                continue;
             } catch (Exception e) {
                 continue;
             }
@@ -34,6 +38,10 @@ public class DiskCache {
                 write(f, fresh);
                 return fresh;
             }
+        }
+        if (body == null && nothingThere) {
+            write(f, "");
+            return "";
         }
         return body;
     }
@@ -66,7 +74,7 @@ public class DiskCache {
      * A name has to stand for the whole key: with a 32-bit hash two different queries collide
      * often enough to be served each other's answer.
      */
-    private static String digest(String key) {
+    static String digest(String key) {
         byte[] sum;
         try {
             sum = MessageDigest.getInstance("SHA-256").digest(key.getBytes("UTF-8"));

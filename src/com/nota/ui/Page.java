@@ -22,6 +22,15 @@ public abstract class Page {
         return root;
     }
 
+    /**
+     * Whether this page is the one on screen. A page under the stack keeps listening, and what
+     * it paints on the window itself — the colour wash behind the top bar — belongs to whichever
+     * page the listener can actually see.
+     */
+    public final boolean visible() {
+        return root != null && root.getVisibility() == View.VISIBLE;
+    }
+
     protected abstract View onCreateView(LayoutInflater inflater, ViewGroup parent);
 
     /** Title shown in the top bar. */
@@ -53,6 +62,14 @@ public abstract class Page {
     }
 
     public void onHide() {
+    }
+
+    /**
+     * The connection came or went. A page shows what can be opened now, and a question the
+     * catalogue could not answer is remembered as an empty answer, so neither side of this
+     * survives on its own.
+     */
+    public void onOnline(boolean online) {
     }
 
     /** Return true if the page consumed the back press. */

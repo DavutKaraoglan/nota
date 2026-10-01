@@ -26,27 +26,25 @@
     </string-array>
 
     <!-- Library sub tabs -->
+    <string name="lib_downloaded">Downloaded</string>
+    <string name="lib_local">On device</string>
     <string name="lib_songs">Songs</string>
     <string name="lib_albums">Albums</string>
     <string name="lib_artists">Artists</string>
     <string name="lib_folders">Folders</string>
 
     <!-- Permission -->
-    <string name="perm_title">Access to your music</string>
     <string name="perm_body">Nota needs permission to read the audio files on this device to build your library.</string>
     <string name="perm_grant">Grant permission</string>
-    <string name="perm_denied_body">Permission was denied. You can enable it from system settings.</string>
-    <string name="perm_open_settings">Open settings</string>
 
     <!-- Empty states -->
     <string name="empty_songs">No music found on this device</string>
     <string name="empty_albums">No albums found</string>
     <string name="empty_artists">No artists found</string>
     <string name="empty_folders">No folders found</string>
+    <string name="empty_downloads">Nothing downloaded yet</string>
     <string name="empty_search">Nothing matched your search</string>
-    <string name="loading">Loading…</string>
     <string name="rescan">Rescan library</string>
-    <string name="scanning">Scanning…</string>
 
     <!-- Counts -->
     <string name="n_songs">%1$d songs</string>
@@ -66,12 +64,10 @@
     <string name="repeat_off">Repeat off</string>
     <string name="repeat_all">Repeat all</string>
     <string name="repeat_one">Repeat one</string>
-    <string name="now_playing">Now playing</string>
     <string name="queue">Queue</string>
     <string name="lyrics">Lyrics</string>
     <string name="equalizer">Equalizer</string>
     <string name="close">Close</string>
-    <string name="stop">Stop</string>
 
     <!-- Actions -->
     <string name="play_next">Play next</string>
@@ -82,7 +78,6 @@
     <string name="go_to_album">Go to album</string>
     <string name="go_to_artist">Go to artist</string>
     <string name="share">Share</string>
-    <string name="track_info">Track info</string>
     <string name="delete">Delete</string>
     <string name="search">Search</string>
     <string name="search_hint">Songs, albums, artists</string>
@@ -104,8 +99,9 @@
     <string name="playlist_name">Playlist name</string>
     <string name="create">Create</string>
     <string name="rename">Rename</string>
-    <string name="empty_playlists">No playlists yet</string>
     <string name="favorites">Favorites</string>
+    <string name="listened_m">You have listened %1$d min</string>
+    <string name="listened_hm">You have listened %1$d hr %2$d min</string>
     <string name="recently_played">Recently played</string>
     <string name="most_played">Most played</string>
     <string name="on_repeat">On repeat</string>
@@ -117,6 +113,8 @@
     <string name="play_all">Play all</string>
     <string name="empty_favorites">No favorites yet</string>
     <string name="empty_history">Nothing played yet</string>
+    <string name="today">Today</string>
+    <string name="yesterday">Yesterday</string>
 
     <!-- Sorting -->
     <string name="sort_title">Title</string>
@@ -132,6 +130,7 @@
     <string name="theme_system">Follow system</string>
     <string name="theme_light">Light</string>
     <string name="theme_dark">Dark</string>
+    <string name="language">Language</string>
     <string name="sleep_timer">Sleep timer</string>
     <string name="sleep_off">Off</string>
     <string name="sleep_minutes">%1$d minutes</string>
@@ -147,8 +146,6 @@
     <string name="equalizer_bass">Bass boost</string>
     <string name="equalizer_virtual">Surround</string>
     <string name="equalizer_loudness">Loudness</string>
-    <string name="lyrics_missing">No lyrics found for this track</string>
-    <string name="lyrics_loading">Looking for lyrics…</string>
     <string name="data_saver">Data saver</string>
     <string name="data_saved_short">%1$s saved</string>
     <string name="data_used">Downloaded: %1$s</string>
@@ -163,8 +160,6 @@
     <string name="discover_error">Could not reach the catalogue</string>
     <string name="recent_searches">Recent searches</string>
     <string name="discover_search_hint">Search for a song or artist</string>
-    <string name="discover_opening">Opening…</string>
-    <string name="discover_no_audio">This item has no playable audio</string>
     <string name="home_empty">Nothing here yet. Play a few songs and they will show up.</string>
     <string name="taste">Listening profile</string>
     <string name="taste_short">%1$d signals</string>
@@ -179,7 +174,13 @@
     <string name="copied">Title copied</string>
     <string name="follow">Subscribe</string>
     <string name="following">Subscribed</string>
+    <string name="mute_artist">Don\'t suggest this artist</string>
+    <string name="unmute_artist">Suggest this artist again</string>
+    <string name="muted_artist">%1$s will not be suggested</string>
+    <string name="unmuted_artist">%1$s can be suggested again</string>
     <string name="autoplay">Keep playing</string>
     <string name="autoplay_on">Similar songs continue when the queue ends</string>
     <string name="autoplay_off">Off</string>
+    <string name="offline">Offline</string>
+    <string name="offline_search">Searching needs a connection</string>
 </resources>

@@ -10,6 +10,9 @@ public class Net {
     /** Some hosts throttle anonymous clients, so every plain GET identifies the app. */
     public static final String USER_AGENT = "Nota/1.0 (Android music player)";
 
+    public static class NotFound extends Exception {
+    }
+
     /**
      * These endpoints answer with a catalogue page; the largest seen is under a megabyte. The
      * cap is on the decoded size because gzip lets a small answer expand without limit, and an
@@ -47,6 +50,7 @@ public class Net {
                 conn.getOutputStream().write(payload);
             }
             int code = conn.getResponseCode();
+            if (code == 404) throw new NotFound();
             if (code != 200) throw new Exception("HTTP " + code);
             in = conn.getInputStream();
             if ("gzip".equalsIgnoreCase(conn.getContentEncoding())) in = new GZIPInputStream(in);

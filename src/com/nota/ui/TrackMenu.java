@@ -93,11 +93,9 @@ public class TrackMenu {
                         // would have nothing to show once the search is gone.
                         db.saveOnline(track);
                         downloads.start(videoId);
-                        toast(host, R.string.downloading);
                         break;
                     case UNDOWNLOAD:
                         downloads.remove(videoId);
-                        toast(host, R.string.download_removed);
                         break;
                     case ALBUM: {
                         Album a = MediaLibrary.get().album(track.albumId);

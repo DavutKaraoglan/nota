@@ -1,5 +1,7 @@
 package com.nota.ui;
 
+import android.animation.ArgbEvaluator;
+import android.animation.ValueAnimator;
 import android.app.Activity;
 import android.app.AlertDialog;
 import android.content.BroadcastReceiver;
@@ -10,9 +12,11 @@ import android.content.DialogInterface;
 import android.content.Intent;
 import android.content.IntentFilter;
 import android.content.res.ColorStateList;
-import android.content.res.Configuration;
 import android.graphics.Color;
+import android.graphics.drawable.ColorDrawable;
+import android.graphics.drawable.Drawable;
 import android.graphics.drawable.GradientDrawable;
+import android.graphics.drawable.TransitionDrawable;
 import android.os.Build;
 import android.os.Bundle;
 import android.os.Handler;
@@ -37,12 +41,14 @@ import android.widget.Toast;
 import com.nota.R;
 import com.nota.data.ArtLoader;
 import com.nota.data.Db;
+import com.nota.data.Downloads;
 import com.nota.data.Lyrics;
-import com.nota.data.Prefs;
+import com.nota.data.YtApi;
 import com.nota.model.Track;
 import com.nota.player.Playback;
 import com.nota.player.PlayerService;
 
+import java.util.ArrayList;
 import java.util.List;
 
 public class NowPlayingActivity extends Activity
@@ -57,13 +63,17 @@ public class NowPlayingActivity extends Activity
 
     private static final int HEART_EVERY_MS = 110;
 
+    /** Long enough to read as a change of light rather than a repaint. */
+    private static final int TINT_FADE_MS = 320;
+
     private ImageView art;
     private View controls;
     /** Holds the rising hearts above everything, so no layout has to make room for them. */
     private FrameLayout heartLayer;
-    private TextView title, subtitle, position, duration, lyricsEmpty, lyricLine;
+    private TextView title, subtitle, position, duration, lyricLine;
     private SeekBar seek;
-    private ImageButton toggle, repeat, favorite;
+    private ImageButton toggle, repeat, favorite, download;
+    private View downloadSlot, downloadBusy;
     private ListView lyricsList;
     private DragSheet sheet;
     private LockScrollView scroll;
@@ -77,9 +87,13 @@ public class NowPlayingActivity extends Activity
     private Lyrics lyrics;
     private LyricAdapter lyricAdapter;
     private boolean showingLyrics;
-    private boolean lookingUpLyrics;
     private boolean dragging;
+    /** What the controls are painted with now, and the colour the bar has reached. */
+    private Drawable tintNow;
+    private int barNow;
+    private ValueAnimator barFade;
     private int highlighted = -1;
+    private long shownDuration = -1;
     /**
      * The swap fades the old line out before setting the new one, so a line asked for now is
      * only readable a fraction of a second later. The clock is read that far ahead to make up
@@ -106,15 +120,7 @@ public class NowPlayingActivity extends Activity
 
     @Override
     protected void attachBaseContext(Context base) {
-        int mode = Prefs.getInt(base, SettingsPage.KEY_THEME, SettingsPage.THEME_SYSTEM);
-        if (mode != SettingsPage.THEME_SYSTEM) {
-            Configuration c = new Configuration(base.getResources().getConfiguration());
-            c.uiMode = (c.uiMode & ~Configuration.UI_MODE_NIGHT_MASK)
-                    | (mode == SettingsPage.THEME_DARK
-                    ? Configuration.UI_MODE_NIGHT_YES : Configuration.UI_MODE_NIGHT_NO);
-            base = base.createConfigurationContext(c);
-        }
-        super.attachBaseContext(base);
+        super.attachBaseContext(Ui.chosen(base));
     }
 
     @Override
@@ -132,8 +138,10 @@ public class NowPlayingActivity extends Activity
         toggle = (ImageButton) findViewById(R.id.btn_toggle);
         repeat = (ImageButton) findViewById(R.id.btn_repeat);
         favorite = (ImageButton) findViewById(R.id.btn_favorite);
+        download = (ImageButton) findViewById(R.id.btn_download);
+        downloadSlot = findViewById(R.id.download_slot);
+        downloadBusy = findViewById(R.id.download_busy);
         lyricsList = (ListView) findViewById(R.id.lyrics);
-        lyricsEmpty = (TextView) findViewById(R.id.lyrics_empty);
         lyricLine = (TextView) findViewById(R.id.lyric_line);
         Ui.round(art, getResources().getDimension(R.dimen.art_radius) * 2);
         controls = findViewById(R.id.controls);
@@ -236,8 +244,27 @@ public class NowPlayingActivity extends Activity
                         .setAction(PlayerService.ACTION_FAVORITE));
             }
         });
+        download.setOnClickListener(new View.OnClickListener() {
+            public void onClick(View v) {
+                String id = keepableId();
+                if (id == null) return;
+                Downloads downloads = Downloads.get(NowPlayingActivity.this);
+                if (downloads.has(id)) {
+                    downloads.remove(id);
+                } else if (!downloads.running(id)) {
+                    // The song has to outlive the search it came from, or what is kept on disk
+                    // would have no title, artist or cover to show once that list is gone.
+                    Db.get(NowPlayingActivity.this).saveOnline(playback.current());
+                    downloads.start(id);
+                }
+                updateDownload();
+            }
+        });
         favorite.setOnLongClickListener(new View.OnLongClickListener() {
             public boolean onLongClick(View v) {
+                // The hearts celebrate a song already loved. Held on one that is not, the press
+                // is left alone so letting go still falls through to the tap that loves it.
+                if (!isFavorite()) return false;
                 handler.post(rising);
                 return true;
             }
@@ -258,7 +285,6 @@ public class NowPlayingActivity extends Activity
             }
         };
         art.setOnClickListener(flipLyrics);
-        lyricsEmpty.setOnClickListener(flipLyrics);
         lyricLine.setOnClickListener(flipLyrics);
         lyricsList.setOnItemClickListener(new AdapterView.OnItemClickListener() {
             public void onItemClick(AdapterView<?> parent, View v, int pos, long id) {
@@ -285,6 +311,16 @@ public class NowPlayingActivity extends Activity
 
         playback.addListener(this);
         bind();
+    }
+
+    /** The full-screen layer the hearts are drawn on, above anything that has to make room. */
+    private FrameLayout overlay() {
+        if (heartLayer == null) {
+            heartLayer = new FrameLayout(this);
+            addContentView(heartLayer, new ViewGroup.LayoutParams(
+                    ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT));
+        }
+        return heartLayer;
     }
 
     /** Sends the screen back down to the bar it came from, then leaves without a flicker. */
@@ -317,6 +353,7 @@ public class NowPlayingActivity extends Activity
         if (Build.VERSION.SDK_INT >= 33) registerReceiver(favoriteWatcher, filter,
                 Context.RECEIVER_NOT_EXPORTED);
         else registerReceiver(favoriteWatcher, filter);
+        Downloads.get(this).addListener(downloadWatcher);
     }
 
     @Override
@@ -325,6 +362,7 @@ public class NowPlayingActivity extends Activity
         handler.removeCallbacks(tick);
         handler.removeCallbacks(rising);
         unregisterReceiver(favoriteWatcher);
+        Downloads.get(this).removeListener(downloadWatcher);
     }
 
     private final BroadcastReceiver favoriteWatcher = new BroadcastReceiver() {
@@ -333,10 +371,17 @@ public class NowPlayingActivity extends Activity
         }
     };
 
+    private final Downloads.Listener downloadWatcher = new Downloads.Listener() {
+        public void onDownloadChanged(String videoId, boolean done) {
+            if (videoId.equals(keepableId())) updateDownload();
+        }
+    };
+
     @Override
     protected void onDestroy() {
         super.onDestroy();
         handler.removeCallbacks(tick);
+        if (barFade != null) barFade.cancel();
         playback.removeListener(this);
     }
 
@@ -348,10 +393,11 @@ public class NowPlayingActivity extends Activity
         }
         title.setText(t.title);
         subtitle.setText(Ui.artistOr(this, t.artist));
-        ArtLoader.get(this).bind(art, t, Ui.dp(this, 320),
-                R.drawable.ic_note, Ui.dp(this, 90));
+        ArtLoader loader = ArtLoader.get(this);
+        loader.bind(art, t, loader.playerSize(), R.drawable.ic_note, Ui.dp(this, 90));
         loadTint(t);
-        duration.setText(Ui.duration(playback.duration()));
+        shownDuration = playback.duration();
+        duration.setText(Ui.duration(shownDuration));
 
         loadLyrics(t);
 
@@ -359,6 +405,7 @@ public class NowPlayingActivity extends Activity
         updateToggle();
         updateModes();
         updateFavorite();
+        updateDownload();
         updateProgress();
     }
 
@@ -366,7 +413,6 @@ public class NowPlayingActivity extends Activity
     private void loadLyrics(final Track t) {
         lyrics = null;
         highlighted = -1;
-        lookingUpLyrics = true;
         lyricLine.animate().cancel();
         lyricLine.setAlpha(1f);
         lyricLine.setTranslationY(0f);
@@ -378,7 +424,6 @@ public class NowPlayingActivity extends Activity
                 Track now = playback.current();
                 if (now == null || !now.equals(t)) return;
                 lyrics = found;
-                lookingUpLyrics = false;
                 lyricAdapter.notifyDataSetChanged();
                 applyLyricsVisibility();
                 updateProgress();
@@ -398,30 +443,30 @@ public class NowPlayingActivity extends Activity
         queueAdapter.setItems(q);
         queueAdapter.setActiveKey(cur == null ? null : cur.key());
         findViewById(R.id.queue_title).setVisibility(from < q.size() ? View.VISIBLE : View.GONE);
-        queueList.removeAllViews();
+        int wanted = Math.max(0, q.size() - from);
+        while (queueList.getChildCount() > wanted) {
+            queueList.removeViewAt(queueList.getChildCount() - 1);
+        }
         for (int i = from; i < q.size(); i++) {
             final int index = i;
-            View row = queueAdapter.getView(i, null, queueList);
+            int slot = i - from;
+            View reused = slot < queueList.getChildCount() ? queueList.getChildAt(slot) : null;
+            View row = queueAdapter.getView(i, reused, queueList);
             row.setOnClickListener(new View.OnClickListener() {
                 public void onClick(View v) {
                     playback.jumpTo(index);
                 }
             });
-            queueList.addView(row);
+            if (reused == null) queueList.addView(row);
         }
     }
 
     /** One heart, let go from the button and drifting out of sight. */
     private void releaseHeart() {
-        if (heartLayer == null) {
-            heartLayer = new FrameLayout(this);
-            addContentView(heartLayer, new ViewGroup.LayoutParams(
-                    ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT));
-        }
         int[] from = new int[2];
         int[] layer = new int[2];
         favorite.getLocationInWindow(from);
-        heartLayer.getLocationInWindow(layer);
+        overlay().getLocationInWindow(layer);
 
         int size = Ui.dp(this, 16 + (int) (Math.random() * 10));
         final ImageView heart = new ImageView(this);
@@ -462,9 +507,36 @@ public class NowPlayingActivity extends Activity
                 : mode == Playback.REPEAT_ONE ? R.string.repeat_one : R.string.repeat_all));
     }
 
-    private void updateFavorite() {
+    private boolean isFavorite() {
         Track t = playback.current();
-        boolean fav = t != null && Db.get(this).isFavorite(t.key());
+        return t != null && Db.get(this).isFavorite(t.key());
+    }
+
+    /** The id of the song on screen if it can be kept at all, which a local file already is. */
+    private String keepableId() {
+        Track t = playback.current();
+        return t != null && YtApi.isYouTube(t) ? YtApi.videoId(t) : null;
+    }
+
+    private void updateDownload() {
+        String id = keepableId();
+        downloadSlot.setVisibility(id == null ? View.GONE : View.VISIBLE);
+        if (id == null) return;
+        Downloads downloads = Downloads.get(this);
+        boolean kept = downloads.has(id);
+        boolean busy = !kept && downloads.running(id);
+        // The spinner stands in for the button while the song is on its way: the fetch takes
+        // long enough that a tinted icon reads as an unanswered press.
+        downloadBusy.setVisibility(busy ? View.VISIBLE : View.GONE);
+        download.setVisibility(busy ? View.INVISIBLE : View.VISIBLE);
+        download.setImageResource(kept ? R.drawable.ic_downloaded : R.drawable.ic_download);
+        download.setColorFilter(kept ? CONTROL_ON : CONTROL_IDLE);
+        download.setContentDescription(getString(kept ? R.string.download_remove
+                : R.string.download));
+    }
+
+    private void updateFavorite() {
+        boolean fav = isFavorite();
         favorite.setImageResource(fav
                 ? R.drawable.ic_favorite : R.drawable.ic_favorite_border);
         favorite.setColorFilter(fav ? CONTROL_ON : CONTROL_IDLE);
@@ -476,10 +548,13 @@ public class NowPlayingActivity extends Activity
         if (!dragging) {
             seek.setProgress(total > 0 ? (int) (pos * 1000 / total) : 0);
             position.setText(Ui.duration(pos));
-            if (total > 0) duration.setText(Ui.duration(total));
+            if (total > 0 && total != shownDuration) {
+                shownDuration = total;
+                duration.setText(Ui.duration(total));
+            }
         }
         if (lyrics != null && lyrics.synced) {
-            int index = lyrics.indexAt(pos + LYRIC_LEAD_MS);
+            int index = lyrics.indexAt(pos + LYRIC_LEAD_MS, highlighted);
             if (index != highlighted) {
                 highlighted = index;
                 lyricAdapter.notifyDataSetChanged();
@@ -505,18 +580,18 @@ public class NowPlayingActivity extends Activity
     }
 
     private void applyLyricsVisibility() {
-        boolean has = lyrics != null && !lyrics.lines.isEmpty();
-        lyricsList.setVisibility(showingLyrics && has ? View.VISIBLE : View.GONE);
-        lyricsEmpty.setVisibility(showingLyrics && !has ? View.VISIBLE : View.GONE);
+        // Nothing to turn the cover over for: the tap is left as it was rather than answered
+        // with a page that only says there are no words.
+        if (lyrics == null || lyrics.lines.isEmpty()) showingLyrics = false;
+        lyricsList.setVisibility(showingLyrics ? View.VISIBLE : View.GONE);
         sheet.setDragEnabled(!showingLyrics);
         scroll.setLocked(showingLyrics);
-        if (showingLyrics && !has) {
-            lyricsEmpty.setText(lookingUpLyrics ? R.string.lyrics_loading : R.string.lyrics_missing);
-        }
         art.setVisibility(showingLyrics ? View.GONE : View.VISIBLE);
         // The single line says what the list is already saying, so only one of them is ever up.
+        // Its row is held even when empty: a line arriving would otherwise shorten the stage
+        // above it and take the cover up with it, mid-song.
         boolean timed = lyrics != null && lyrics.synced;
-        lyricLine.setVisibility(timed && !showingLyrics ? View.VISIBLE : View.GONE);
+        lyricLine.setVisibility(timed && !showingLyrics ? View.VISIBLE : View.INVISIBLE);
     }
 
     /**
@@ -531,18 +606,51 @@ public class NowPlayingActivity extends Activity
         });
     }
 
+    /**
+     * The colour belongs to the song, so it changes when the song does — but a screen that
+     * repaints in one frame reads as a glitch, and one that shifts reads as the same screen
+     * holding a different record.
+     */
     private void applyTint(int colour) {
-        int bar = colour == 0 ? getColor(R.color.accent) : vivid(colour);
-        seek.setProgressTintList(ColorStateList.valueOf(bar));
-        seek.setThumbTintList(ColorStateList.valueOf(bar));
+        fadeBar(colour == 0 ? getColor(R.color.accent) : vivid(colour));
         seek.setProgressBackgroundTintList(ColorStateList.valueOf(0x66FFFFFF));
-        if (colour == 0) {
-            controls.setBackground(null);
+
+        int rgb = colour & 0xFFFFFF;
+        Drawable next = colour == 0
+                ? new ColorDrawable(Color.TRANSPARENT)
+                : new GradientDrawable(GradientDrawable.Orientation.BOTTOM_TOP,
+                        new int[]{0xD9000000 | rgb, 0x40000000 | rgb, rgb});
+        // Faded from what is on screen rather than from whatever the view was last given: the
+        // handover is what gets wrapped, and wrapping a wrapper stacks them up for good.
+        Drawable from = tintNow == null ? new ColorDrawable(Color.TRANSPARENT) : tintNow;
+        TransitionDrawable swap = new TransitionDrawable(new Drawable[]{from, next});
+        swap.setCrossFadeEnabled(true);
+        controls.setBackground(swap);
+        swap.startTransition(TINT_FADE_MS);
+        tintNow = next;
+    }
+
+    private void fadeBar(int to) {
+        if (barFade != null) barFade.cancel();
+        int from = barNow == 0 ? to : barNow;
+        barNow = to;
+        if (from == to) {
+            paintBar(to);
             return;
         }
-        int rgb = colour & 0xFFFFFF;
-        controls.setBackground(new GradientDrawable(GradientDrawable.Orientation.BOTTOM_TOP,
-                new int[]{0xD9000000 | rgb, 0x40000000 | rgb, rgb}));
+        barFade = ValueAnimator.ofObject(new ArgbEvaluator(), from, to);
+        barFade.setDuration(TINT_FADE_MS);
+        barFade.addUpdateListener(new ValueAnimator.AnimatorUpdateListener() {
+            public void onAnimationUpdate(ValueAnimator a) {
+                paintBar((Integer) a.getAnimatedValue());
+            }
+        });
+        barFade.start();
+    }
+
+    private void paintBar(int colour) {
+        seek.setProgressTintList(ColorStateList.valueOf(colour));
+        seek.setThumbTintList(ColorStateList.valueOf(colour));
     }
 
     /** The seek bar sits on a dark page, so the cover colour is pushed up before it is used. */
