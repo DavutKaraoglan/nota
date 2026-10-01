@@ -23,7 +23,7 @@ public class Track {
     public int year;
     public long sizeBytes;
     public long dateAddedSec;
-    /** Catalogue identifier for online tracks, e.g. an Internet Archive item id. */
+    /** Catalogue identifier for online tracks, e.g. {@code yt:<videoId>}. */
     public String sourceId;
 
     /** Played over the network: artwork comes from a URL and there is no local .lrc file. */

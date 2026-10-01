@@ -2,12 +2,20 @@
 
 # Nota
 
+[![Release](https://img.shields.io/github/v/release/DavutKaraoglan/nota?style=flat-square&color=111111&labelColor=444444)](https://github.com/DavutKaraoglan/nota/releases/latest)
+[![Downloads](https://img.shields.io/github/downloads/DavutKaraoglan/nota/total?style=flat-square&color=111111&labelColor=444444)](https://github.com/DavutKaraoglan/nota/releases)
+[![Android](https://img.shields.io/badge/Android-7.0%2B-111111?style=flat-square&labelColor=444444)](AndroidManifest.xml)
+[![Licence](https://img.shields.io/github/license/DavutKaraoglan/nota?style=flat-square&color=111111&labelColor=444444)](LICENSE)
+
 Music player for Android. It plays the songs already on your phone, and when you want something
 else, it can fetch it. What it records about your listening stays on your own phone.
 
-|  |  |  |  |
-| --- | --- | --- | --- |
-| ![Home](docs/home.jpg) | ![Artist](docs/artist.jpg) | ![Now playing](docs/player.jpg) | ![Lyrics](docs/lyrics.jpg) |
+<p>
+  <img src="docs/home.jpg" width="24%" alt="Home" />
+  <img src="docs/artist.jpg" width="24%" alt="Artist" />
+  <img src="docs/player.jpg" width="24%" alt="Now playing" />
+  <img src="docs/lyrics.jpg" width="24%" alt="Lyrics" />
+</p>
 
 ## What you get
 
@@ -47,7 +55,7 @@ heard yet, and nothing in it can be paid into your recommendations.
 
 **What does leave the phone.** Everything Nota records about your listening sits in one database
 on the phone, and that is the only copy. But finding a song, a cover, an artist's story or
-lyrics means asking YouTube, MusicBrainz, Wikidata, LRCLIB or the Internet Archive, and those
+lyrics means asking YouTube, MusicBrainz, Wikidata or LRCLIB, and those
 requests carry what you searched for to them, over an IP address they can see. Your play counts
 stay behind: no request includes them.
 
@@ -99,5 +107,5 @@ on every skip.
 
 ## Licence
 
-MIT, see [LICENSE](LICENSE). Nota is not affiliated with YouTube, MusicBrainz, LRCLIB or the
-Internet Archive; it only asks their public endpoints.
+MIT, see [LICENSE](LICENSE). Nota is not affiliated with YouTube, MusicBrainz, Wikidata or
+LRCLIB; it only asks their public endpoints.
