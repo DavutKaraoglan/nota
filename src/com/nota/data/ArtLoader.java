@@ -41,7 +41,8 @@ public class ArtLoader {
 
     private final Context app;
     private final Handler main = new Handler(Looper.getMainLooper());
-    private final ExecutorService pool = Executors.newFixedThreadPool(3);
+    private final ExecutorService local = Executors.newFixedThreadPool(2);
+    private final ExecutorService remote = Executors.newFixedThreadPool(4);
     private final LruCache<String, Bitmap> cache;
     private final File diskDir;
 
@@ -106,7 +107,7 @@ public class ArtLoader {
         final String path = track.isRemote() ? track.artUrl : track.data;
         final long albumId = track.albumId;
         final boolean stream = track.isRemote();
-        pool.execute(new Runnable() {
+        (stream ? remote : local).execute(new Runnable() {
             public void run() {
                 final Bitmap bmp = stream ? loadRemote(path, sizePx)
                         : loadAlbum(albumId, path, sizePx);
@@ -220,7 +221,7 @@ public class ArtLoader {
             cb.onBitmap(hit);
             return;
         }
-        pool.execute(new Runnable() {
+        remote.execute(new Runnable() {
             public void run() {
                 final Bitmap bmp = fetch(sizedWide(rawUrl, w, h), w);
                 if (bmp != null) cache.put(key, bmp);
@@ -252,6 +253,7 @@ public class ArtLoader {
             }
             f.delete();
         }
+        NetPriority.yieldToAudio();
         HttpURLConnection conn = null;
         InputStream in = null;
         try {

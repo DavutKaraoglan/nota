@@ -19,6 +19,7 @@ import android.provider.MediaStore;
 
 import com.nota.data.CrashLog;
 import com.nota.data.Db;
+import com.nota.data.NetPriority;
 import com.nota.data.Prefetch;
 import com.nota.data.Prefs;
 import com.nota.data.Recommender;
@@ -507,6 +508,7 @@ public class Playback implements MediaPlayer.OnCompletionListener,
 
         releasePlayer();
         opened = t;
+        if (t.isRemote()) NetPriority.audioStarting();
         PlayerService.start(app);
         fireTrack();
         fireState();
@@ -556,6 +558,7 @@ public class Playback implements MediaPlayer.OnCompletionListener,
     public void onPrepared(MediaPlayer player) {
         prepared = true;
         buffering = false;
+        NetPriority.audioReady();
         long waited = System.currentTimeMillis() - openedAt;
         // Worth a line only when the wait was long enough to be felt. Noting every start turned
         // the report into a log of the app working, which is then offered as if it were a crash.
@@ -672,6 +675,7 @@ public class Playback implements MediaPlayer.OnCompletionListener,
         opened = null;
         prepared = false;
         buffering = false;
+        NetPriority.audioReady();
         setPlaying(false);
         releasePlayer();
         unregisterNoisy();
