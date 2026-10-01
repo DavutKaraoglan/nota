@@ -1,0 +1,6 @@
+Nota now asks YouTube for the audio from the phone itself, and fetches it in chunks that run at line speed instead of at the pace of the song.
+
+- Home screen built from what has been listened to: a mood strip, songs on repeat, suggestions, and compilations around an artist you play often.
+- Artist pages with a picture, the links an artist publishes, following, and a way to keep an artist out of suggestions.
+- Library split into favourites, downloads, and what is on the phone.
+- Away from a connection, screens leave out whatever cannot be played.

@@ -1,0 +1,13 @@
+Music player for Android. It plays the songs already on your phone, and when you want something else, it can search YouTube and play that too. What it records about your listening stays on your own phone.
+
+Shelves built from your own counts. Nota counts which songs you finish and which you cut short, and fills the home screen from those counts: what you have on repeat, compilations around an artist you play often, and that artist's newest release. The counting and the ranking both happen on the phone, so the suggestions keep working away from a connection.
+
+Lyrics. Nota looks them up, scrolls them with the song, and writes them in latin letters when the song is not.
+
+Artists. Each artist has a page with a picture and a short story from the open catalogues, the links the artist publishes, and a way to follow them or to keep them out of your suggestions.
+
+Light on the connection. Whatever Nota fetches once it writes to disk, so the same screen opens again without touching the network. Settings shows how much was spent and how much was saved.
+
+What leaves the phone: everything Nota records about your listening sits in one database on the phone, and that is the only copy. Finding a song, a cover, an artist's story or lyrics means asking YouTube, MusicBrainz, Wikidata or LRCLIB, and those requests carry what you searched for. Your play counts stay behind.
+
+Nota owns no music and licenses none. It plays your files, and for anything else it asks the public internet.

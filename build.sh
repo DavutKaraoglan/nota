@@ -4,6 +4,8 @@ set -euo pipefail
 ROOT="$(cd "$(dirname "$0")" && pwd)"
 ANDROID_JAR="${ANDROID_JAR:-$ROOT/tools/android33.jar}"
 KEYSTORE="${KEYSTORE:-$ROOT/tools/debug.keystore}"
+KEYSTORE_PASS="${KEYSTORE_PASS:-android}"
+KEY_ALIAS="${KEY_ALIAS:-androiddebugkey}"
 OUT="$ROOT/build"
 MIN_SDK=24
 TARGET_SDK=33
@@ -13,6 +15,9 @@ if [ -z "${JAVA_HOME:-}" ]; then
                    /usr/lib/jvm/java-21-openjdk; do
     [ -x "$candidate/bin/javac" ] && JAVA_HOME="$candidate" && break
   done
+  if [ -z "${JAVA_HOME:-}" ] && command -v javac >/dev/null; then
+    JAVA_HOME="$(dirname "$(dirname "$(readlink -f "$(command -v javac)")")")"
+  fi
 fi
 if [ -z "${JAVA_HOME:-}" ] || [ ! -x "$JAVA_HOME/bin/javac" ]; then
   echo "JDK 21 not found. Set JAVA_HOME, or on Termux: pkg install openjdk-21" >&2
@@ -37,7 +42,7 @@ MSG
   exit 1
 fi
 
-if [ ! -f "$KEYSTORE" ]; then
+if [ ! -f "$KEYSTORE" ] && [ "$KEYSTORE" = "$ROOT/tools/debug.keystore" ]; then
   echo ">> debug keystore"
   mkdir -p "$(dirname "$KEYSTORE")"
   "$JAVA_HOME/bin/keytool" -genkeypair -v -keystore "$KEYSTORE" \
@@ -83,7 +88,8 @@ echo ">> zipalign"
 zipalign -p -f 4 "$OUT/unsigned.apk" "$OUT/aligned.apk"
 
 echo ">> sign"
-apksigner sign --ks "$KEYSTORE" --ks-pass pass:android --key-pass pass:android \
+apksigner sign --ks "$KEYSTORE" --ks-pass "pass:$KEYSTORE_PASS" \
+  --key-pass "pass:$KEYSTORE_PASS" --ks-key-alias "$KEY_ALIAS" \
   --min-sdk-version $MIN_SDK \
   --out "$OUT/nota.apk" "$OUT/aligned.apk"
 

@@ -83,11 +83,16 @@ cp .../platforms/android-33/android.jar tools/android33.jar
 ```
 
 The script generates a debug keystore on the first run and leaves the signed APK in
-`build/nota.apk`. The platform jar can also be pointed at from outside:
+`build/nota.apk`. The platform jar and the signing key can both be pointed at from outside:
 
 ```sh
 ANDROID_JAR=/path/to/android.jar ./build.sh
+KEYSTORE=/path/to/release.jks KEYSTORE_PASS=... KEY_ALIAS=nota ./build.sh
 ```
+
+The releases here are signed with the key whose fingerprints are printed in the
+[1.1 notes](https://github.com/DavutKaraoglan/nota/releases/tag/v1.1); a build of your own
+carries your key instead, and Android will not upgrade one over the other.
 
 ### How a YouTube track is fetched
 
@@ -107,5 +112,4 @@ on every skip.
 
 ## Licence
 
-MIT, see [LICENSE](LICENSE). Nota is not affiliated with YouTube, MusicBrainz, Wikidata or
-LRCLIB; it only asks their public endpoints.
+MIT, see [LICENSE](LICENSE).
