@@ -64,6 +64,7 @@ public class Playback implements MediaPlayer.OnCompletionListener,
     private static final int MIN_AHEAD = 12;
     /** A start slower than this is a fault worth recording; anything under it is just playback. */
     private static final long SLOW_START_MS = 5000;
+    private static final long SAVE_EVERY_MS = 10000;
 
     private static Playback instance;
 
@@ -109,6 +110,18 @@ public class Playback implements MediaPlayer.OnCompletionListener,
     private Runnable sleepTask;
     private long sleepAtMs;
 
+    private boolean restored;
+    private long resumeFromMs;
+    private Track resumeTrack;
+
+    private final Runnable saveTick = new Runnable() {
+        public void run() {
+            if (!playing) return;
+            Session.savePosition(app, position());
+            main.postDelayed(this, SAVE_EVERY_MS);
+        }
+    };
+
     private final BroadcastReceiver noisyReceiver = new BroadcastReceiver() {
         @Override
         public void onReceive(Context context, Intent intent) {
@@ -142,6 +155,42 @@ public class Playback implements MediaPlayer.OnCompletionListener,
 
     private void fireQueue() {
         for (Listener l : listeners) l.onQueueChanged();
+        saveSession(position());
+    }
+
+    private void saveSession(long positionMs) {
+        Session.save(app, queue(), orderPos, positionMs, shuffle, repeat);
+    }
+
+    public void restore() {
+        if (restored || !queue.isEmpty()) return;
+        Db.background(new Runnable() {
+            public void run() {
+                final Session.Snapshot s = Session.load(app);
+                if (s == null) return;
+                main.post(new Runnable() {
+                    public void run() {
+                        apply(s);
+                    }
+                });
+            }
+        });
+    }
+
+    private void apply(Session.Snapshot s) {
+        if (restored || !queue.isEmpty()) return;
+        restored = true;
+        shuffle = s.shuffle;
+        repeat = s.repeat;
+        queue.addAll(s.tracks);
+        order.clear();
+        for (int i = 0; i < queue.size(); i++) order.add(i);
+        orderPos = s.index;
+        resumeFromMs = s.positionMs;
+        resumeTrack = current();
+        fireTrack();
+        fireState();
+        fireQueue();
     }
 
     // ---- state ----
@@ -158,7 +207,7 @@ public class Playback implements MediaPlayer.OnCompletionListener,
 
     public Track peekPrevious() {
         if (order.isEmpty()) return null;
-        if (position() > 3000) return current();
+        if (prepared && position() > 3000) return current();
         if (orderPos > 0) return at(orderPos - 1);
         return at(repeat == REPEAT_ALL ? order.size() - 1 : orderPos);
     }
@@ -205,9 +254,9 @@ public class Playback implements MediaPlayer.OnCompletionListener,
 
     public long position() {
         try {
-            return prepared && mp != null ? mp.getCurrentPosition() : 0;
+            return prepared && mp != null ? mp.getCurrentPosition() : resumeFromMs;
         } catch (IllegalStateException e) {
-            return 0;
+            return resumeFromMs;
         }
     }
 
@@ -274,11 +323,13 @@ public class Playback implements MediaPlayer.OnCompletionListener,
 
     public void cycleRepeat() {
         repeat = (repeat + 1) % 3;
+        saveSession(position());
         fireState();
     }
 
     public void setRepeat(int mode) {
         repeat = mode;
+        saveSession(position());
         fireState();
     }
 
@@ -396,6 +447,9 @@ public class Playback implements MediaPlayer.OnCompletionListener,
         order.clear();
         queue.clear();
         orderPos = -1;
+        resumeTrack = null;
+        resumeFromMs = 0;
+        Session.clear(app);
         fireTrack();
         fireState();
         PlayerService.stop(app);
@@ -419,7 +473,7 @@ public class Playback implements MediaPlayer.OnCompletionListener,
     /** Restarts the track when more than 3 seconds in, like every other player. */
     public void previous() {
         if (order.isEmpty()) return;
-        if (position() > 3000) {
+        if (prepared && position() > 3000) {
             seekTo(0);
             return;
         }
@@ -434,7 +488,10 @@ public class Playback implements MediaPlayer.OnCompletionListener,
                 mp.seekTo((int) ms);
             } catch (IllegalStateException ignored) {
             }
+        } else if (resumeTrack != null && resumeTrack == current()) {
+            resumeFromMs = Math.max(0, ms);
         }
+        Session.savePosition(app, position());
     }
 
     // ---- engine ----
@@ -447,8 +504,14 @@ public class Playback implements MediaPlayer.OnCompletionListener,
     private void setPlaying(boolean value) {
         if (playing == value) return;
         playing = value;
-        if (value) heardSince = SystemClock.elapsedRealtime();
-        else bankHeard(false);
+        main.removeCallbacks(saveTick);
+        if (value) {
+            heardSince = SystemClock.elapsedRealtime();
+            main.postDelayed(saveTick, SAVE_EVERY_MS);
+        } else {
+            bankHeard(false);
+            Session.savePosition(app, position());
+        }
     }
 
     /** Closes the run of sounding that is open, carrying on from now if the song still plays. */
@@ -499,6 +562,10 @@ public class Playback implements MediaPlayer.OnCompletionListener,
     private void openCurrent(boolean autoStart) {
         Track t = current();
         if (t == null) return;
+        if (t != resumeTrack) {
+            resumeTrack = null;
+            resumeFromMs = 0;
+        }
         closeOut(t);
         playWhenReady = autoStart;
         prepared = false;
@@ -510,6 +577,7 @@ public class Playback implements MediaPlayer.OnCompletionListener,
         opened = t;
         if (t.isRemote()) NetPriority.audioStarting();
         PlayerService.start(app);
+        saveSession(resumeFromMs);
         fireTrack();
         fireState();
 
@@ -570,6 +638,14 @@ public class Playback implements MediaPlayer.OnCompletionListener,
             CrashLog.exportPending(app);
         }
         Fx.get(app).attach(audioSessionId);
+        if (resumeFromMs > 0 && current() == resumeTrack) {
+            try {
+                player.seekTo((int) resumeFromMs);
+            } catch (IllegalStateException ignored) {
+            }
+        }
+        resumeTrack = null;
+        resumeFromMs = 0;
         if (playWhenReady && requestFocus()) {
             try {
                 player.start();

@@ -87,6 +87,12 @@ public class MainActivity extends Activity {
         }
     };
 
+    private final MediaLibrary.Listener libraryReady = new MediaLibrary.Listener() {
+        public void onLibraryChanged() {
+            Playback.get(MainActivity.this).restore();
+        }
+    };
+
     @Override
     protected void attachBaseContext(Context base) {
         super.attachBaseContext(Ui.chosen(base));
@@ -162,10 +168,13 @@ public class MainActivity extends Activity {
         mini = new MiniPlayer(this, (FrameLayout) findViewById(R.id.mini_holder));
         selectTab(TAB_HOME);
 
+        MediaLibrary.get().addListener(libraryReady);
         if (hasAudioPermission(this)) {
             MediaLibrary.get().load(this, false);
+            if (MediaLibrary.get().isLoaded()) Playback.get(this).restore();
         } else {
             requestAudioPermission();
+            Playback.get(this).restore();
         }
         requestNotificationPermission();
         showPendingCrash();
@@ -496,6 +505,7 @@ public class MainActivity extends Activity {
     protected void onDestroy() {
         super.onDestroy();
         searchHandler.removeCallbacks(searchRunnable);
+        MediaLibrary.get().removeListener(libraryReady);
         if (offlineFade != null) offlineFade.cancel();
         if (watcher != null) watcher.stop();
         if (mini != null) mini.onDestroy();
