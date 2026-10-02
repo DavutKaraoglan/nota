@@ -21,6 +21,8 @@ import java.io.FileOutputStream;
 import java.io.InputStream;
 import java.net.HttpURLConnection;
 import java.net.URL;
+import java.util.ArrayList;
+import java.util.List;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 
@@ -38,6 +40,8 @@ public class ArtLoader {
 
     /** A cover is a few hundred kilobytes; the whole body is held in memory before decoding. */
     private static final int MAX_ART_BYTES = 4 * 1024 * 1024;
+
+    private static final String[] FRAMES = {"maxresdefault.jpg", "hq720.jpg", "sddefault.jpg"};
 
     private final Context app;
     private final Handler main = new Handler(Looper.getMainLooper());
@@ -236,7 +240,34 @@ public class ArtLoader {
 
     private Bitmap loadRemote(String rawUrl, int size) {
         if (rawUrl == null || rawUrl.length() == 0) return null;
-        return fetch(sized(rawUrl, size), size);
+        for (String url : sources(rawUrl, size)) {
+            Bitmap b = fetch(url, size);
+            if (b != null) return b;
+        }
+        return null;
+    }
+
+    private static List<String> sources(String rawUrl, int px) {
+        List<String> out = new ArrayList<String>(FRAMES.length + 1);
+        String base = bucket(px) > 320 ? frameBase(rawUrl) : null;
+        if (base != null) {
+            for (String frame : FRAMES) out.add(base + frame);
+        }
+        out.add(sized(rawUrl, px));
+        return out;
+    }
+
+    private static String frameBase(String url) {
+        int at = url.indexOf("/vi/");
+        int skip = 4;
+        if (at < 0) {
+            at = url.indexOf("/vi_webp/");
+            skip = 9;
+        }
+        if (at < 0) return null;
+        int end = url.indexOf('/', at + skip);
+        if (end < 0) return null;
+        return url.substring(0, at) + "/vi/" + url.substring(at + skip, end) + "/";
     }
 
     private Bitmap fetch(String url, int size) {

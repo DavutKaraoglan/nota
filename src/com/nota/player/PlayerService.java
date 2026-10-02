@@ -176,6 +176,7 @@ public class PlayerService extends Service implements Playback.Listener {
 
     public void onTrackChanged(Track track) {
         updateSessionMetadata(track);
+        updateSessionState();
         pushNotification();
     }
 
@@ -295,12 +296,6 @@ public class PlayerService extends Service implements Playback.Listener {
         if (art == null && t != null) art = ArtLoader.get(this).cached(t, ART_PX);
         if (art != null) b.setLargeIcon(art);
 
-        boolean fav = isFavorite(t);
-        b.addAction(new Notification.Action.Builder(
-                android.graphics.drawable.Icon.createWithResource(this,
-                        fav ? R.drawable.ic_favorite : R.drawable.ic_favorite_border),
-                getString(fav ? R.string.favorite_remove : R.string.favorite_add),
-                servicePendingIntent(ACTION_FAVORITE)).build());
         b.addAction(new Notification.Action.Builder(
                 android.graphics.drawable.Icon.createWithResource(this, R.drawable.ic_prev),
                 getString(R.string.previous), servicePendingIntent(ACTION_PREV)).build());
@@ -312,11 +307,15 @@ public class PlayerService extends Service implements Playback.Listener {
         b.addAction(new Notification.Action.Builder(
                 android.graphics.drawable.Icon.createWithResource(this, R.drawable.ic_next),
                 getString(R.string.next), servicePendingIntent(ACTION_NEXT)).build());
+        boolean fav = isFavorite(t);
+        b.addAction(new Notification.Action.Builder(
+                android.graphics.drawable.Icon.createWithResource(this,
+                        fav ? R.drawable.ic_favorite : R.drawable.ic_favorite_border),
+                getString(fav ? R.string.favorite_remove : R.string.favorite_add),
+                servicePendingIntent(ACTION_FAVORITE)).build());
 
-        // The heart is action 0 but stays out of the compact view; collapsed space is only
-        // wide enough for the three transport buttons.
         Notification.MediaStyle style = new Notification.MediaStyle()
-                .setShowActionsInCompactView(1, 2, 3);
+                .setShowActionsInCompactView(0, 1, 2);
         if (session != null) style.setMediaSession(session.getSessionToken());
         b.setStyle(style);
 
