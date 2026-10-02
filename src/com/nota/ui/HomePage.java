@@ -22,9 +22,11 @@ import com.nota.model.Track;
 import com.nota.player.Playback;
 
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Locale;
+import java.util.Random;
 import java.util.Set;
 
 /**
@@ -50,6 +52,8 @@ public class HomePage extends Page implements MediaLibrary.Listener, Playback.Li
     private LinearLayout sections;
     private ScrollView scroll;
     private View empty;
+
+    private final long mixDraw = new Random().nextLong();
 
     /** What the recommender last answered, kept so returning to this screen costs nothing. */
     private List<Track> forYou = new ArrayList<Track>();
@@ -464,15 +468,17 @@ public class HomePage extends Page implements MediaLibrary.Listener, Playback.Li
      * The radio is only asked for once a card is opened, so a row of them costs nothing to show.
      */
     private void addMixes(CharSequence title, List<Track> pool) {
-        List<Track> seeds = new ArrayList<Track>();
+        List<Track> candidates = new ArrayList<Track>();
         Set<String> seen = new HashSet<String>();
         for (Track t : pool) {
             // A song on the phone has no radio behind it; only the catalogue answers for a seed.
             if (!YtApi.isYouTube(t)) continue;
             String who = TextUtils.isEmpty(t.artist) ? t.title : t.artist;
-            if (seen.add(who.toLowerCase(Locale.ROOT))) seeds.add(t);
-            if (seeds.size() == MIXES) break;
+            if (seen.add(who.toLowerCase(Locale.ROOT))) candidates.add(t);
         }
+        Collections.shuffle(candidates, new Random(mixDraw));
+        List<Track> seeds = candidates.size() > MIXES
+                ? new ArrayList<Track>(candidates.subList(0, MIXES)) : candidates;
         if (seeds.isEmpty()) return;
 
         View slider = LayoutInflater.from(host).inflate(

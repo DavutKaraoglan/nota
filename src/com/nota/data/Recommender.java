@@ -46,6 +46,11 @@ public class Recommender {
     private static final float P_RECENT = 0.5f;
     /** Enough favourites to describe a taste, few enough that each one still costs one mix. */
     private static final int TASTE_SEEDS = 4;
+    private static final int TASTE_POOL = 24;
+    private static final float W_EXPLORE_SHELF = 0.45f;
+    private static final float P_SHOWN = 0.4f;
+    private static final String KEY_SHOWN = "taste_shown";
+    private static final int SHOWN_MEMORY = 60;
 
     private static final Handler MAIN = new Handler(Looper.getMainLooper());
     private static final Random RND = new Random();
@@ -128,7 +133,7 @@ public class Recommender {
             // Nothing on the device relates to this song, so any of it beats silence.
             for (Track t : MediaLibrary.get().tracks()) offer(pool, avoid, false, t, W_LAST_RESORT);
         }
-        return rank(app, db, pool, want, false);
+        return rank(app, db, pool, want, false, W_EXPLORE, Collections.<String>emptySet());
     }
 
     private static List<Track> buildTaste(Context app, int want) {
@@ -145,7 +150,28 @@ public class Recommender {
         // A shelf is read as a list of names, so a second song by an artist already on it reads
         // as an album track rather than as a suggestion. The queue can repeat an artist; this
         // cannot.
-        return rank(app, db, pool, want, true);
+        List<Track> out = rank(app, db, pool, want, true, W_EXPLORE_SHELF, shown(app));
+        remember(app, out);
+        return out;
+    }
+
+    private static Set<String> shown(Context app) {
+        Set<String> out = new HashSet<String>();
+        for (String key : Prefs.getString(app, KEY_SHOWN, "").split("\n")) {
+            if (key.length() > 0) out.add(key);
+        }
+        return out;
+    }
+
+    private static void remember(Context app, List<Track> picks) {
+        if (picks.isEmpty()) return;
+        List<String> keys = new ArrayList<String>();
+        for (Track t : picks) keys.add(t.key());
+        for (String old : Prefs.getString(app, KEY_SHOWN, "").split("\n")) {
+            if (keys.size() >= SHOWN_MEMORY) break;
+            if (old.length() > 0 && !keys.contains(old)) keys.add(old);
+        }
+        Prefs.setString(app, KEY_SHOWN, TextUtils.join("\n", keys));
     }
 
     /**
@@ -163,15 +189,17 @@ public class Recommender {
         }
     }
 
-    /** The songs the listener keeps coming back to, one per artist so no favourite crowds it. */
     private static List<Track> tasteSeeds(Context app, Db db) {
         List<Track> out = new ArrayList<Track>();
         Set<String> artists = new HashSet<String>();
-        for (Track t : MediaLibrary.resolve(app, new ArrayList<String>(db.topScored(40).keySet()))) {
+        List<Track> loved = new ArrayList<Track>(MediaLibrary.resolve(
+                app, new ArrayList<String>(db.topScored(TASTE_POOL).keySet())));
+        while (!loved.isEmpty() && out.size() < TASTE_SEEDS) {
+            double lean = RND.nextDouble();
+            Track t = loved.remove((int) (lean * lean * loved.size()));
             String artist = artistKey(t);
             if (artist != null && !artists.add(artist)) continue;
             out.add(t);
-            if (out.size() >= TASTE_SEEDS) break;
         }
         return out;
     }
@@ -201,7 +229,7 @@ public class Recommender {
     }
 
     private static List<Track> rank(Context app, Db db, Map<String, Candidate> pool, int want,
-                                    boolean onePerArtist) {
+                                    boolean onePerArtist, float explore, Set<String> stale) {
         Map<String, Float> affinity = artistAffinity(app, db);
         Set<String> recent = new HashSet<String>(db.recentKeys(20));
         Set<String> muted = Muted.keys(app);
@@ -216,8 +244,9 @@ public class Recommender {
             // Taste only tilts the order among songs that already answer the seed. Added on top
             // it used to outweigh the relation itself, which is how a favourite from somewhere
             // else entirely ended up next in the queue.
-            float tilt = 1f + W_AFFINITY * (a == null ? 0f : a) + W_EXPLORE * RND.nextFloat();
+            float tilt = 1f + W_AFFINITY * (a == null ? 0f : a) + explore * RND.nextFloat();
             if (recent.contains(c.track.key())) tilt -= P_RECENT;
+            if (stale.contains(c.track.key())) tilt -= P_SHOWN;
             c.score *= tilt;
         }
         Collections.sort(ranked, new Comparator<Candidate>() {
