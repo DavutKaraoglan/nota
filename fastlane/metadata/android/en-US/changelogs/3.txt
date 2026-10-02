@@ -1,0 +1,5 @@
+Leaving the app no longer loses the song. The queue, the spot in it, and the shuffle and repeat choices come back where they were, paused and ready.
+
+- The favourite button keeps its place in the notification instead of moving once the controls appear.
+- Large covers reach for the full frame, so the art stays sharp on the lock screen.
+- The home screen draws from a wider pool: seeds vary between launches, songs shown recently step aside, and the compilations take a fresh order each time.
