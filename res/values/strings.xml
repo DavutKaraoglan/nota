@@ -201,4 +201,7 @@
     <string name="pause_history_warning">If you turn this on, you won\'t get suggestions based on the music you listen to. Songs you play and what you search for are not recorded, so the home page and the next song suggestions stop learning from them.</string>
     <string name="pause_history_confirm">Turn on</string>
     <string name="version">Version %s</string>
+    <string name="lib_followed">Subscriptions</string>
+    <string name="empty_followed">Follow an artist from their page and their newest songs appear here</string>
+    <string name="empty_followed_releases">No new songs found from the artists you follow</string>
 </resources>

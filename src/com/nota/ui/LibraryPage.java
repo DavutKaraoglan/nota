@@ -15,7 +15,9 @@ import android.widget.TextView;
 import com.nota.R;
 import com.nota.data.Db;
 import com.nota.data.Downloads;
+import com.nota.data.Follows;
 import com.nota.data.MediaLibrary;
+import com.nota.data.YtApi;
 import com.nota.model.Album;
 import com.nota.model.Artist;
 import com.nota.model.FolderBucket;
@@ -32,16 +34,19 @@ public class LibraryPage extends Page
         implements MediaLibrary.Listener, Playback.Listener, Downloads.Listener {
 
     private static final int S_SONGS = 0, S_ALBUMS = 1, S_ARTISTS = 2, S_FOLDERS = 3,
-            S_LIKED = 4, S_DOWNLOADED = 5;
-    private static final int TOP_LIKED = 0, TOP_DOWNLOADED = 1, TOP_LOCAL = 2;
+            S_LIKED = 4, S_DOWNLOADED = 5, S_FOLLOWED = 6;
+    private static final int TOP_LIKED = 0, TOP_DOWNLOADED = 1, TOP_LOCAL = 2, TOP_FOLLOWED = 3;
 
     public static final int SORT_TITLE = 0, SORT_ARTIST = 1, SORT_ALBUM = 2,
             SORT_ADDED = 3, SORT_DURATION = 4;
 
     private final TextView[] chips = new TextView[4];
-    private final TextView[] topChips = new TextView[3];
-    private final View[] sections = new View[6];
-    private final TrackAdapter[] trackAdapters = new TrackAdapter[6];
+    private final TextView[] topChips = new TextView[4];
+    private final View[] sections = new View[7];
+    private final TrackAdapter[] trackAdapters = new TrackAdapter[7];
+    private List<Track> followed = new ArrayList<Track>();
+    private String followedFor;
+    private String askingFollowed;
     private FrameLayout container;
     private View localChips;
     private int section = S_LIKED;
@@ -67,10 +72,12 @@ public class LibraryPage extends Page
         topChips[TOP_LIKED] = (TextView) root.findViewById(R.id.chip_liked);
         topChips[TOP_DOWNLOADED] = (TextView) root.findViewById(R.id.chip_downloaded);
         topChips[TOP_LOCAL] = (TextView) root.findViewById(R.id.chip_local);
+        topChips[TOP_FOLLOWED] = (TextView) root.findViewById(R.id.chip_followed);
+        topChips[TOP_FOLLOWED].setText(R.string.lib_followed);
         topChips[TOP_LIKED].setText(R.string.favorites);
         topChips[TOP_DOWNLOADED].setText(R.string.lib_downloaded);
         topChips[TOP_LOCAL].setText(R.string.lib_local);
-        final int[] tops = {S_LIKED, S_DOWNLOADED, S_SONGS};
+        final int[] tops = {S_LIKED, S_DOWNLOADED, S_SONGS, S_FOLLOWED};
         for (int i = 0; i < topChips.length; i++) {
             final int index = i;
             topChips[i].setOnClickListener(new View.OnClickListener() {
@@ -135,15 +142,22 @@ public class LibraryPage extends Page
         rebuild();
     }
 
+    @Override
+    public void onShow() {
+        if (section == S_FOLLOWED) rebuild();
+    }
+
     // ---- sections ----
 
     private void showSection(int index) {
+        if (index == S_FOLLOWED && followed.isEmpty()) followedFor = null;
         section = index;
         boolean local = index <= S_FOLDERS;
         if (local) localSection = index;
         topChips[TOP_LIKED].setSelected(index == S_LIKED);
         topChips[TOP_DOWNLOADED].setSelected(index == S_DOWNLOADED);
         topChips[TOP_LOCAL].setSelected(local);
+        topChips[TOP_FOLLOWED].setSelected(index == S_FOLLOWED);
         localChips.setVisibility(local ? View.VISIBLE : View.GONE);
         for (int i = 0; i < chips.length; i++) chips[i].setSelected(i == index);
         View v = sections[index];
@@ -177,7 +191,8 @@ public class LibraryPage extends Page
             return v;
         }
 
-        if (index == S_SONGS || index == S_LIKED || index == S_DOWNLOADED) {
+        if (index == S_SONGS || index == S_LIKED || index == S_DOWNLOADED
+                || index == S_FOLLOWED) {
             final TrackAdapter adapter = new TrackAdapter(host, new ArrayList<Track>());
             trackAdapters[index] = adapter;
             list.setAdapter(adapter);
@@ -266,6 +281,9 @@ public class LibraryPage extends Page
                     source = MediaLibrary.resolve(host, Db.get(host).favoriteKeys());
                 } else if (section == S_DOWNLOADED) {
                     source = MediaLibrary.resolve(host, Downloads.get(host).keptKeys());
+                } else if (section == S_FOLLOWED) {
+                    askFollowed();
+                    source = MediaLibrary.playableOnly(host, followed);
                 } else {
                     source = songsInOrder(lib);
                 }
@@ -288,7 +306,8 @@ public class LibraryPage extends Page
         View progress = v.findViewById(R.id.progress);
 
         boolean local = section <= S_FOLDERS;
-        boolean scanning = local && lib.isLoading();
+        boolean scanning = (local && lib.isLoading())
+                || (section == S_FOLLOWED && askingFollowed != null);
         progress.setVisibility(scanning && count == 0 ? View.VISIBLE : View.GONE);
         emptyBox.setVisibility(count == 0 && !scanning ? View.VISIBLE : View.GONE);
         action.setVisibility(View.GONE);
@@ -298,6 +317,10 @@ public class LibraryPage extends Page
                 empty.setText(query.length() > 0 ? R.string.empty_search : R.string.empty_favorites);
             } else if (section == S_DOWNLOADED) {
                 empty.setText(query.length() > 0 ? R.string.empty_search : R.string.empty_downloads);
+            } else if (section == S_FOLLOWED) {
+                empty.setText(query.length() > 0 ? R.string.empty_search
+                        : Follows.all(host).isEmpty() ? R.string.empty_followed
+                        : R.string.empty_followed_releases);
             } else if (noPermission) {
                 empty.setText(R.string.perm_body);
                 android.widget.Button b = (android.widget.Button) action;
@@ -317,6 +340,35 @@ public class LibraryPage extends Page
                         : R.string.empty_songs);
             }
         }
+    }
+
+    private void askFollowed() {
+        final List<String> artists = Follows.all(host);
+        final String key = artists.toString();
+        if (key.equals(followedFor) || key.equals(askingFollowed)) return;
+        if (artists.isEmpty()) {
+            followed = new ArrayList<Track>();
+            followedFor = key;
+            return;
+        }
+        askingFollowed = key;
+        YtApi.followedReleases(host, artists, new YtApi.TrackCallback() {
+            public void onTracks(List<Track> tracks) {
+                done(tracks);
+            }
+
+            public void onError() {
+                done(new ArrayList<Track>());
+            }
+
+            private void done(List<Track> tracks) {
+                if (!key.equals(askingFollowed)) return;
+                askingFollowed = null;
+                followed = tracks;
+                followedFor = key;
+                if (section == S_FOLLOWED) rebuild();
+            }
+        });
     }
 
     private List<Track> songsInOrder(MediaLibrary lib) {

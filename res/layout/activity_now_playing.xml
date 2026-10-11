@@ -278,8 +278,21 @@
                 android:id="@+id/queue_list"
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
-                android:paddingBottom="24dp"
                 android:orientation="vertical" />
+
+            <ProgressBar
+                android:id="@+id/queue_more"
+                style="?android:attr/progressBarStyleSmall"
+                android:layout_width="24dp"
+                android:layout_height="24dp"
+                android:layout_gravity="center_horizontal"
+                android:layout_marginTop="8dp"
+                android:indeterminateTint="@color/text_secondary"
+                android:visibility="gone" />
+
+            <View
+                android:layout_width="match_parent"
+                android:layout_height="24dp" />
         </LinearLayout>
     </com.nota.ui.LockScrollView>
 </com.nota.ui.DragSheet>

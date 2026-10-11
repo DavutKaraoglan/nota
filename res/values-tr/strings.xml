@@ -199,4 +199,7 @@
     <string name="pause_history_warning">Bunu açarsan dinlediğin müziklere göre öneri alamazsın. Çaldığın şarkılar ve aramaların kaydedilmez, ana sayfa ve sıradaki şarkı önerileri bunlardan öğrenmez.</string>
     <string name="pause_history_confirm">Aç</string>
     <string name="version">Sürüm %s</string>
+    <string name="lib_followed">Abonelikler</string>
+    <string name="empty_followed">Sanatçı sayfasından abone olduğun sanatçıların son şarkıları burada görünür</string>
+    <string name="empty_followed_releases">Abone olduğun sanatçıların şarkıları bulunamadı</string>
 </resources>

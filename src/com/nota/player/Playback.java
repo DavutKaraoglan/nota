@@ -105,6 +105,13 @@ public class Playback implements MediaPlayer.OnCompletionListener,
     /** The track a recommendation batch was last asked for, so the tail is only extended once. */
     private String extendedFrom;
     private boolean extending;
+    private boolean loadingMore;
+
+    public static final int MORE_BATCH = 12;
+
+    public interface MoreCallback {
+        void onMore(int added);
+    }
 
     private AudioFocusRequest focusRequest;
     private boolean noisyRegistered;
@@ -346,6 +353,32 @@ public class Playback implements MediaPlayer.OnCompletionListener,
             orderPos = 0;
             openCurrent(true);
         }
+    }
+
+    public boolean isLoadingMore() {
+        return loadingMore;
+    }
+
+    public void loadMore(final MoreCallback cb) {
+        if (loadingMore || queue.isEmpty()) return;
+        List<Track> q = queue();
+        Track last = q.get(q.size() - 1);
+        loadingMore = true;
+        askMore(last, current(), cb);
+    }
+
+    private void askMore(final Track seed, final Track fallback, final MoreCallback cb) {
+        Recommender.nextFor(app, seed, queue(), MORE_BATCH, new Recommender.Callback() {
+            public void onTracks(List<Track> tracks) {
+                if (tracks.isEmpty() && fallback != null && !fallback.key().equals(seed.key())) {
+                    askMore(fallback, null, cb);
+                    return;
+                }
+                loadingMore = false;
+                addToQueue(tracks);
+                if (cb != null) cb.onMore(tracks.size());
+            }
+        });
     }
 
     public void playNext(List<Track> tracks) {

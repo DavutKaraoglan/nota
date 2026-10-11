@@ -81,6 +81,8 @@ public class NowPlayingActivity extends Activity
     private LockScrollView scroll;
     private View playerPage;
     private ViewGroup queueList;
+    private View queueMore;
+    private String exhaustedAt;
     private int barTop;
     private boolean closing;
 
@@ -161,6 +163,12 @@ public class NowPlayingActivity extends Activity
         playerPage = findViewById(R.id.player_page);
         queueList = (ViewGroup) findViewById(R.id.queue_list);
         queueAdapter = new TrackAdapter(this, playback.queue());
+        queueMore = findViewById(R.id.queue_more);
+        scroll.setOnScrollChangeListener(new View.OnScrollChangeListener() {
+            public void onScrollChange(View v, int x, int y, int oldX, int oldY) {
+                if (y > oldY) maybeLoadMore();
+            }
+        });
         Ui.round(findViewById(R.id.handle), Ui.dp(this, 2));
         // The player fills the window and the queue starts right under it, so one upward
         // scroll walks from one to the other instead of opening a second surface.
@@ -463,6 +471,24 @@ public class NowPlayingActivity extends Activity
             });
             if (reused == null) queueList.addView(row);
         }
+    }
+
+    private void maybeLoadMore() {
+        if (showingLyrics || playback.isLoadingMore() || queueList.getChildCount() == 0) return;
+        View content = scroll.getChildAt(0);
+        if (content == null) return;
+        int bottom = scroll.getScrollY() + scroll.getHeight();
+        if (bottom < content.getHeight() - Ui.dp(this, 160)) return;
+        List<Track> q = playback.queue();
+        final String tail = q.isEmpty() ? null : q.get(q.size() - 1).key();
+        if (tail == null || tail.equals(exhaustedAt)) return;
+        queueMore.setVisibility(View.VISIBLE);
+        playback.loadMore(new Playback.MoreCallback() {
+            public void onMore(int added) {
+                queueMore.setVisibility(View.GONE);
+                if (added == 0) exhaustedAt = tail;
+            }
+        });
     }
 
     /** One heart, let go from the button and drifting out of sight. */

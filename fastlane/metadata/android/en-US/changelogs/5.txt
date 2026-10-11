@@ -1,0 +1,3 @@
+- Search looks through videos as well as songs, so game and film soundtracks that only exist as videos turn up, and remixes, covers and loops step back unless you ask for them.
+- The queue keeps going: scroll to the bottom and twelve more songs are added.
+- The library has a Subscriptions tab with the newest releases from the artists you follow.

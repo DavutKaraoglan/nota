@@ -12,6 +12,8 @@ import org.json.JSONObject;
 
 import java.util.ArrayList;
 import java.util.Calendar;
+import java.util.Collections;
+import java.util.Comparator;
 import java.util.HashSet;
 import java.util.Iterator;
 import java.util.List;
@@ -79,6 +81,7 @@ public class YtApi {
      * carry no release date anywhere in the answer, and these rows carry the year, which is the
      * only way to tell what an artist put out this season from what they are known for.
      */
+    private static final String VIDEOS_ONLY = "EgWKAQIQAWoKEAkQBRAKEAMQBA%3D%3D";
     private static final String RELEASES_ONLY = "EgWKAQIYAWoKEAkQBRAKEAMQBA%3D%3D";
     /**
      * YouTube Music's own web client. It answers with square cover art and with title, artist,
@@ -138,25 +141,52 @@ public class YtApi {
         }, "nota-yt-search").start();
     }
 
+    public static void searchWide(Context c, final String term, final TrackCallback cb) {
+        final Context app = c.getApplicationContext();
+        new Thread(new Runnable() {
+            public void run() {
+                final List<Track> out = searchWideBlocking(app, term);
+                MAIN.post(new Runnable() {
+                    public void run() {
+                        if (out == null) cb.onError();
+                        else cb.onTracks(out);
+                    }
+                });
+            }
+        }, "nota-yt-search").start();
+    }
+
+    public static List<Track> searchWideBlocking(Context app, String term) {
+        List<Track> songs = searchBlocking(app, term);
+        List<Track> videos = searchFiltered(app, term, VIDEOS_ONLY, "v:", true);
+        if (songs == null && videos == null) return null;
+        return SearchRank.merge(term, songs, videos);
+    }
+
     /** Blocking: call it from a worker thread. Null means the search could not be answered. */
     public static List<Track> searchBlocking(Context app, String term) {
+        return searchFiltered(app, term, SONGS_ONLY, "m:", false);
+    }
+
+    private static List<Track> searchFiltered(Context app, String term, String params,
+                                              String cachePrefix, boolean videos) {
         Client c = YT_MUSIC;
         String body;
         try {
             body = new JSONObject()
                     .put("query", term)
-                    .put("params", SONGS_ONLY)
+                    .put("params", params)
                     .put("context", c.context())
                     .toString();
         } catch (Exception e) {
             return null;
         }
-        String json = DiskCache.loadPost(app, "yt", "m:" + term, SEARCH_FRESH_MS,
+        String json = DiskCache.loadPost(app, "yt", cachePrefix + term, SEARCH_FRESH_MS,
                 SEARCH_URL, body, c.ua);
-        return json == null ? null : LessAi.filter(app, parseSearch(json));
+        return json == null ? null : LessAi.filter(app, parseSearch(json, videos));
     }
 
-    private static List<Track> parseSearch(String json) {
+    private static List<Track> parseSearch(String json, boolean videos) {
         List<JSONObject> rows = new ArrayList<JSONObject>();
         try {
             collect(new JSONObject(json), "musicResponsiveListItemRenderer", rows);
@@ -166,7 +196,9 @@ public class YtApi {
         List<Track> out = new ArrayList<Track>(rows.size());
         for (JSONObject row : rows) {
             Track t = toTrack(row);
-            if (t != null) out.add(t);
+            if (t == null) continue;
+            if (videos) t.album = null;
+            out.add(t);
         }
         return out;
     }
@@ -281,6 +313,160 @@ public class YtApi {
         long age = ageMs(app, videoId(out.get(0)));
         if (age < 0 || age > FRESH_WINDOW_MS) return new ArrayList<Track>();
         return out;
+    }
+
+    private static final int RELEASES_PER_ARTIST = 2;
+    private static final int SONGS_PER_RELEASE = 5;
+    private static final long ALBUM_FRESH_MS = 30L * 24 * 60 * 60 * 1000;
+
+    private static class Release {
+        String browseId;
+        int year;
+        int rank;
+        List<Track> songs = new ArrayList<Track>();
+    }
+
+    public static void followedReleases(Context c, final List<String> artists,
+                                        final TrackCallback cb) {
+        final Context app = c.getApplicationContext();
+        new Thread(new Runnable() {
+            public void run() {
+                List<Release> found = new ArrayList<Release>();
+                boolean reached = artists.isEmpty();
+                for (String artist : artists) {
+                    List<Release> releases = newestReleases(app, artist);
+                    if (releases == null) continue;
+                    reached = true;
+                    for (Release r : releases) {
+                        if (albumSongs(app, r, artist)) found.add(r);
+                    }
+                }
+                Collections.sort(found, new Comparator<Release>() {
+                    public int compare(Release a, Release b) {
+                        if (a.year != b.year) return b.year - a.year;
+                        return a.rank - b.rank;
+                    }
+                });
+                final List<Track> out = new ArrayList<Track>();
+                for (Release r : found) out.addAll(r.songs);
+                final boolean answered = reached;
+                MAIN.post(new Runnable() {
+                    public void run() {
+                        if (answered) cb.onTracks(LessAi.filter(app, out));
+                        else cb.onError();
+                    }
+                });
+            }
+        }, "nota-yt-followed").start();
+    }
+
+    private static List<Release> newestReleases(Context app, String artist) {
+        String channel = artistChannel(app, artist);
+        if (channel == null) return null;
+        String body;
+        try {
+            body = new JSONObject()
+                    .put("browseId", channel)
+                    .put("context", YT_MUSIC.context())
+                    .toString();
+        } catch (Exception e) {
+            return null;
+        }
+        String json = DiskCache.loadPost(app, "yt", "chanrel:" + channel, RELEASE_FRESH_MS,
+                BROWSE_URL, body, YT_MUSIC.ua);
+        if (json == null) return null;
+        List<JSONObject> items = new ArrayList<JSONObject>();
+        try {
+            collect(new JSONObject(json), "musicTwoRowItemRenderer", items);
+        } catch (Exception e) {
+            return null;
+        }
+        List<Release> all = new ArrayList<Release>();
+        Set<String> seen = new HashSet<String>();
+        for (int i = 0; i < items.size(); i++) {
+            JSONObject item = items.get(i);
+            JSONObject nav = item.optJSONObject("navigationEndpoint");
+            JSONObject browse = nav == null ? null : nav.optJSONObject("browseEndpoint");
+            String id = browse == null ? "" : browse.optString("browseId", "");
+            if (!id.startsWith("MPREb_") || !seen.add(id)) continue;
+            int year = year(bullets(text(item.optJSONObject("subtitle"))));
+            if (year == 0) continue;
+            Release r = new Release();
+            r.browseId = id;
+            r.year = year;
+            r.rank = i;
+            all.add(r);
+        }
+        Collections.sort(all, new Comparator<Release>() {
+            public int compare(Release a, Release b) {
+                if (a.year != b.year) return b.year - a.year;
+                return a.rank - b.rank;
+            }
+        });
+        return all.size() > RELEASES_PER_ARTIST
+                ? new ArrayList<Release>(all.subList(0, RELEASES_PER_ARTIST)) : all;
+    }
+
+    private static boolean albumSongs(Context app, Release r, String artist) {
+        String body;
+        try {
+            body = new JSONObject()
+                    .put("browseId", r.browseId)
+                    .put("context", YT_MUSIC.context())
+                    .toString();
+        } catch (Exception e) {
+            return false;
+        }
+        String json = DiskCache.loadPost(app, "yt", "album:" + r.browseId, ALBUM_FRESH_MS,
+                BROWSE_URL, body, YT_MUSIC.ua);
+        if (json == null) return false;
+        JSONObject page;
+        try {
+            page = new JSONObject(json);
+        } catch (Exception e) {
+            return false;
+        }
+        List<JSONObject> heads = new ArrayList<JSONObject>();
+        collect(page, "musicResponsiveHeaderRenderer", heads);
+        String album = null;
+        String art = null;
+        String by = artist;
+        if (!heads.isEmpty()) {
+            JSONObject head = heads.get(0);
+            album = text(head.optJSONObject("title"));
+            String strap = text(head.optJSONObject("straplineTextOne"));
+            if (!TextUtils.isEmpty(strap)) by = strap;
+            art = thumbnail(head);
+        }
+        List<JSONObject> rows = new ArrayList<JSONObject>();
+        collect(page, "musicResponsiveListItemRenderer", rows);
+        for (JSONObject row : rows) {
+            if (r.songs.size() >= SONGS_PER_RELEASE) break;
+            JSONObject data = row.optJSONObject("playlistItemData");
+            String id = data == null ? null : data.optString("videoId", "");
+            String title = column(row, 0);
+            if (!validId(id) || TextUtils.isEmpty(title)) continue;
+            Track t = new Track();
+            t.type = Track.TYPE_ONLINE;
+            t.sourceId = PREFIX + id;
+            t.title = title;
+            t.artist = by;
+            t.album = album;
+            t.year = r.year;
+            t.artUrl = art;
+            t.durationMs = parseLength(fixedColumn(row));
+            r.songs.add(t);
+        }
+        return !r.songs.isEmpty();
+    }
+
+    private static String fixedColumn(JSONObject row) {
+        JSONArray cols = row.optJSONArray("fixedColumns");
+        if (cols == null || cols.length() == 0) return "";
+        JSONObject col = cols.optJSONObject(0);
+        JSONObject inner = col == null ? null
+                : col.optJSONObject("musicResponsiveListItemFixedColumnRenderer");
+        return inner == null ? "" : text(inner.optJSONObject("text"));
     }
 
     private static int thisYear() {

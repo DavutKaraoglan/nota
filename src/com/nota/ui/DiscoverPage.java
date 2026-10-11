@@ -114,7 +114,7 @@ public class DiscoverPage extends Page implements Playback.Listener {
             return;
         }
         setLoading(true);
-        YtApi.search(host, query, new YtApi.TrackCallback() {
+        YtApi.searchWide(host, query, new YtApi.TrackCallback() {
             public void onTracks(List<Track> found) {
                 if (id != requestId) return;
                 deliver(found, R.string.discover_empty, false);
