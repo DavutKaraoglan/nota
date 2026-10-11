@@ -35,12 +35,12 @@ else, it can fetch it. What it records about your listening stays on your own ph
 
 |  | Nota | Spotify, YouTube Music, Apple Music | Other offline players |
 | --- | --- | --- | --- |
-| Account | not needed | required | not needed |
-| Size on your phone | about a quarter of a megabyte | a hundred times that | ten to a hundred times that |
-| Advertisements, subscription | neither | one or both | varies |
-| Where suggestions come from | your own phone | their servers | there usually are none |
-| Suggestions without a connection | yes | no | - |
-| What it knows about you | stays on the phone | what you play, and when | varies |
+| Works without an account | yes | no | yes |
+| Under one megabyte | yes | no | no |
+| Free of ads and subscriptions | yes | no | ? |
+| Suggestions worked out on the phone | yes | no | no |
+| Suggestions without a connection | yes | no | no |
+| Listening history stays on the phone | yes | no | ? |
 
 It feels quick because it is small and keeps whatever it fetches. It opens straight into your
 own library, and it goes back to the network only for something it does not have yet: a search

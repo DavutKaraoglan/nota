@@ -48,8 +48,15 @@ public class Db extends SQLiteOpenHelper {
         return instance;
     }
 
+    private final Context app;
+
     private Db(Context c) {
         super(c, NAME, null, VERSION);
+        app = c;
+    }
+
+    private boolean paused() {
+        return HistoryPause.on(app);
     }
 
     @Override
@@ -292,6 +299,11 @@ public class Db extends SQLiteOpenHelper {
         return revision;
     }
 
+    public synchronized void reloaded() {
+        favorites = null;
+        revision++;
+    }
+
     public boolean isFavorite(String key) {
         return favorites().contains(key);
     }
@@ -333,6 +345,7 @@ public class Db extends SQLiteOpenHelper {
     public void recordPlay(Track track) {
         // The catalogue copy must exist before the key lands in history, or the entry is dead.
         if (track.type == Track.TYPE_ONLINE) saveOnline(track);
+        if (paused()) return;
         String key = track.key();
         SQLiteDatabase db = getWritableDatabase();
         long now = System.currentTimeMillis();
@@ -363,7 +376,7 @@ public class Db extends SQLiteOpenHelper {
      * nowhere to land belongs to a play that never started and is dropped.
      */
     public void addListened(String trackKey, long ms) {
-        if (ms <= 0) return;
+        if (ms <= 0 || paused()) return;
         SQLiteStatement st = getWritableDatabase().compileStatement(
                 "UPDATE play_counts SET heard_ms = heard_ms + ? WHERE track_key = ?");
         st.bindLong(1, ms);
@@ -421,6 +434,7 @@ public class Db extends SQLiteOpenHelper {
     // ---- taste signals ----
 
     public void recordEvent(String trackKey, int kind, int score) {
+        if (paused()) return;
         SQLiteDatabase db = getWritableDatabase();
         ContentValues v = new ContentValues();
         v.put("track_key", trackKey);
@@ -434,6 +448,7 @@ public class Db extends SQLiteOpenHelper {
 
     /** Nudged rather than set, so one distracted evening cannot erase a pairing. */
     public void bumpTransition(String fromKey, String toKey, int delta) {
+        if (paused()) return;
         SQLiteDatabase db = getWritableDatabase();
         long now = System.currentTimeMillis();
         SQLiteStatement st = db.compileStatement("UPDATE transitions SET weight = weight + ?, "

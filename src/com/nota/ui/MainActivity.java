@@ -6,10 +6,12 @@ import android.animation.AnimatorListenerAdapter;
 import android.animation.ValueAnimator;
 import android.app.Activity;
 import android.content.Context;
+import android.content.ActivityNotFoundException;
 import android.content.Intent;
 import android.content.pm.PackageManager;
 import android.graphics.drawable.Drawable;
 import android.graphics.drawable.GradientDrawable;
+import android.net.Uri;
 import android.os.Build;
 import android.os.Bundle;
 import android.os.Handler;
@@ -25,21 +27,29 @@ import android.widget.FrameLayout;
 import android.widget.ImageButton;
 import android.widget.ImageView;
 import android.widget.TextView;
+import android.widget.Toast;
 
 import com.nota.R;
 import android.app.AlertDialog;
 import android.content.DialogInterface;
 
+import com.nota.data.Backup;
 import com.nota.data.CacheTrim;
 import com.nota.data.Connectivity;
 import com.nota.data.CrashLog;
 import com.nota.data.DataSaver;
+import com.nota.data.Db;
 import com.nota.data.MediaLibrary;
 import com.nota.data.YtApi;
 import com.nota.model.Track;
 import com.nota.player.Playback;
 
+import java.io.InputStream;
+import java.io.OutputStream;
+import java.text.SimpleDateFormat;
 import java.util.ArrayList;
+import java.util.Date;
+import java.util.Locale;
 import java.util.List;
 
 public class MainActivity extends Activity {
@@ -57,6 +67,8 @@ public class MainActivity extends Activity {
 
     private static final int REQ_AUDIO = 1;
     private static final int REQ_NOTIFY = 2;
+    private static final int REQ_EXPORT = 3;
+    private static final int REQ_IMPORT = 4;
 
     private FrameLayout content;
     private View tint;
@@ -127,7 +139,7 @@ public class MainActivity extends Activity {
 
         setupTab(R.id.tab_home, TAB_HOME, R.drawable.ic_home, R.string.tab_home);
         setupTab(R.id.tab_discover, TAB_DISCOVER, R.drawable.ic_search, R.string.tab_discover);
-        setupTab(R.id.tab_library, TAB_LIBRARY, R.drawable.ic_note, R.string.tab_library);
+        setupTab(R.id.tab_library, TAB_LIBRARY, R.drawable.ic_library, R.string.tab_library);
         setupTab(R.id.tab_history, TAB_HISTORY, R.drawable.ic_timer, R.string.tab_history);
 
         btnBack.setOnClickListener(new View.OnClickListener() {
@@ -549,6 +561,99 @@ public class MainActivity extends Activity {
                     }
                 })
                 .show();
+    }
+
+    // ---- backup ----
+
+    public void exportBackup() {
+        String name = "nota-" + new SimpleDateFormat("yyyy-MM-dd", Locale.ROOT).format(new Date())
+                + ".json";
+        pickDocument(new Intent(Intent.ACTION_CREATE_DOCUMENT)
+                .addCategory(Intent.CATEGORY_OPENABLE)
+                .setType("application/json")
+                .putExtra(Intent.EXTRA_TITLE, name), REQ_EXPORT);
+    }
+
+    public void importBackup() {
+        pickDocument(new Intent(Intent.ACTION_OPEN_DOCUMENT)
+                .addCategory(Intent.CATEGORY_OPENABLE)
+                .setType("*/*"), REQ_IMPORT);
+    }
+
+    private void pickDocument(Intent intent, int request) {
+        try {
+            startActivityForResult(intent, request);
+        } catch (ActivityNotFoundException e) {
+            Toast.makeText(this, R.string.backup_failed, Toast.LENGTH_LONG).show();
+        }
+    }
+
+    @Override
+    protected void onActivityResult(int request, int result, Intent data) {
+        super.onActivityResult(request, result, data);
+        if (result != RESULT_OK || data == null || data.getData() == null) return;
+        final Uri uri = data.getData();
+        final Context app = getApplicationContext();
+        if (request == REQ_EXPORT) {
+            Db.background(new Runnable() {
+                public void run() {
+                    boolean ok;
+                    try {
+                        OutputStream out = app.getContentResolver().openOutputStream(uri, "wt");
+                        try {
+                            Backup.write(app, out);
+                        } finally {
+                            out.close();
+                        }
+                        ok = true;
+                    } catch (Exception e) {
+                        ok = false;
+                    }
+                    final boolean saved = ok;
+                    runOnUiThread(new Runnable() {
+                        public void run() {
+                            Toast.makeText(app, saved ? R.string.backup_saved
+                                    : R.string.backup_failed, Toast.LENGTH_SHORT).show();
+                        }
+                    });
+                }
+            });
+        } else if (request == REQ_IMPORT) {
+            Db.background(new Runnable() {
+                public void run() {
+                    Backup.Result r;
+                    try {
+                        InputStream in = app.getContentResolver().openInputStream(uri);
+                        try {
+                            r = Backup.read(app, in);
+                        } finally {
+                            in.close();
+                        }
+                    } catch (Exception e) {
+                        r = null;
+                    }
+                    final Backup.Result done = r;
+                    runOnUiThread(new Runnable() {
+                        public void run() {
+                            onImported(done);
+                        }
+                    });
+                }
+            });
+        }
+    }
+
+    private void onImported(Backup.Result r) {
+        if (r == null) {
+            Toast.makeText(this, R.string.backup_unreadable, Toast.LENGTH_LONG).show();
+            return;
+        }
+        String text = getString(R.string.backup_restored, r.favorites, r.plays, r.playlists);
+        if (r.missingLocal > 0) {
+            text += "\n" + getString(R.string.backup_missing_local, r.missingLocal);
+        }
+        Toast.makeText(this, text, Toast.LENGTH_LONG).show();
+        if (!isFinishing() && !isDestroyed()) recreate();
     }
 
     // ---- permissions ----

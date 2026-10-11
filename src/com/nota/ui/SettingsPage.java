@@ -14,6 +14,8 @@ import android.widget.Toast;
 import com.nota.R;
 import com.nota.data.DataSaver;
 import com.nota.data.Db;
+import com.nota.data.HistoryPause;
+import com.nota.data.LessAi;
 import com.nota.data.MediaLibrary;
 import com.nota.data.Prefs;
 import com.nota.model.Track;
@@ -34,7 +36,9 @@ public class SettingsPage extends Page {
     private static final String[] LANGUAGE_NAMES = {null, "Türkçe", "English"};
 
     private static final int ROW_THEME = 0, ROW_LANGUAGE = 1, ROW_SLEEP = 2, ROW_EQ = 3,
-            ROW_AUTOPLAY = 4, ROW_DATA = 5, ROW_TASTE = 6, ROW_CLEAR = 7, ROW_ABOUT = 8;
+            ROW_AUTOPLAY = 4, ROW_DATA = 5, ROW_TASTE = 6, ROW_CLEAR = 7, ROW_ABOUT = 8,
+            ROW_EXPORT = 9, ROW_IMPORT = 10, ROW_LESS_AI = 11,
+            ROW_PAUSE = 12;
 
     private static final int[] SLEEP_MINUTES = {0, 15, 30, 45, 60, 90};
 
@@ -51,8 +55,12 @@ public class SettingsPage extends Page {
         rows.add(ROW_SLEEP);
         rows.add(ROW_EQ);
         rows.add(ROW_AUTOPLAY);
+        rows.add(ROW_LESS_AI);
         rows.add(ROW_DATA);
         rows.add(ROW_TASTE);
+        rows.add(ROW_PAUSE);
+        rows.add(ROW_EXPORT);
+        rows.add(ROW_IMPORT);
         rows.add(ROW_CLEAR);
         rows.add(ROW_ABOUT);
 
@@ -101,6 +109,19 @@ public class SettingsPage extends Page {
             case ROW_TASTE:
                 showTaste();
                 break;
+            case ROW_LESS_AI:
+                LessAi.set(host, !LessAi.on(host));
+                adapter.notifyDataSetChanged();
+                break;
+            case ROW_PAUSE:
+                togglePause();
+                break;
+            case ROW_EXPORT:
+                host.exportBackup();
+                break;
+            case ROW_IMPORT:
+                host.importBackup();
+                break;
             case ROW_CLEAR:
                 Db.get(host).clearHistory();
                 Toast.makeText(host, R.string.history_cleared, Toast.LENGTH_SHORT).show();
@@ -108,11 +129,40 @@ public class SettingsPage extends Page {
             default:
                 new AlertDialog.Builder(host, R.style.NotaTheme_Dialog)
                         .setTitle(R.string.about)
-                        .setMessage(R.string.about_body)
+                        .setMessage(host.getString(R.string.about_body) + "\n\n"
+                                + host.getString(R.string.version, versionName()))
                         .setPositiveButton(R.string.ok, null)
                         .show();
                 break;
         }
+    }
+
+    private String versionName() {
+        try {
+            return host.getPackageManager().getPackageInfo(host.getPackageName(), 0).versionName;
+        } catch (Exception e) {
+            return "?";
+        }
+    }
+
+    private void togglePause() {
+        if (HistoryPause.on(host)) {
+            HistoryPause.set(host, false);
+            adapter.notifyDataSetChanged();
+            return;
+        }
+        new AlertDialog.Builder(host, R.style.NotaTheme_Dialog)
+                .setTitle(R.string.pause_history)
+                .setMessage(R.string.pause_history_warning)
+                .setPositiveButton(R.string.pause_history_confirm,
+                        new DialogInterface.OnClickListener() {
+                            public void onClick(DialogInterface d, int which) {
+                                HistoryPause.set(host, true);
+                                adapter.notifyDataSetChanged();
+                            }
+                        })
+                .setNegativeButton(R.string.cancel, null)
+                .show();
     }
 
     private void showDataUsage() {
@@ -241,10 +291,19 @@ public class SettingsPage extends Page {
             }
             case ROW_TASTE:
                 return host.getString(R.string.taste_short, Db.get(host).eventCount());
+            case ROW_LESS_AI:
+                return host.getString(LessAi.on(host) ? R.string.less_ai_on : R.string.less_ai_off);
+            case ROW_PAUSE:
+                return host.getString(HistoryPause.on(host) ? R.string.pause_history_on
+                        : R.string.pause_history_off);
+            case ROW_EXPORT:
+                return host.getString(R.string.backup_export_short);
+            case ROW_IMPORT:
+                return host.getString(R.string.backup_import_short);
             case ROW_CLEAR:
                 return "";
             case ROW_ABOUT:
-                return "";
+                return host.getString(R.string.version, versionName());
             default:
                 return "";
         }
@@ -266,6 +325,14 @@ public class SettingsPage extends Page {
                 return R.string.data_saver;
             case ROW_TASTE:
                 return R.string.taste;
+            case ROW_LESS_AI:
+                return R.string.less_ai;
+            case ROW_PAUSE:
+                return R.string.pause_history;
+            case ROW_EXPORT:
+                return R.string.backup_export;
+            case ROW_IMPORT:
+                return R.string.backup_import;
             case ROW_CLEAR:
                 return R.string.clear_history;
             default:

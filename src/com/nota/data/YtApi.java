@@ -153,7 +153,7 @@ public class YtApi {
         }
         String json = DiskCache.loadPost(app, "yt", "m:" + term, SEARCH_FRESH_MS,
                 SEARCH_URL, body, c.ua);
-        return json == null ? null : parseSearch(json);
+        return json == null ? null : LessAi.filter(app, parseSearch(json));
     }
 
     private static List<Track> parseSearch(String json) {
@@ -597,7 +597,7 @@ public class YtApi {
             t.artUrl = thumbnail(row);
             out.add(t);
         }
-        return out;
+        return LessAi.filter(app, out);
     }
 
     private static String column(JSONObject row, int index) {

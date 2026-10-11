@@ -126,7 +126,7 @@
 
     <!-- Ayarlar -->
     <string name="theme">Tema</string>
-    <string name="theme_system">Sistemi izle</string>
+    <string name="theme_system">Sistem</string>
     <string name="theme_light">Açık</string>
     <string name="theme_dark">Koyu</string>
     <string name="language">Dil</string>
@@ -138,7 +138,7 @@
     <string name="clear_history">Dinleme geçmişini temizle</string>
     <string name="history_cleared">Geçmiş temizlendi</string>
     <string name="about">Hakkında</string>
-    <string name="about_body">Nota, internetten de müzik arayabilen çevrimdışı bir müzik çalar. Hesap yok, takip yok.</string>
+    <string name="about_body">Nota, internetten de müzik arayabilen çevrimdışı bir müzik çalar.</string>
     <string name="nothing_playing">Çalan bir şey yok</string>
     <string name="equalizer_preset">Hazır ayar</string>
     <string name="equalizer_custom">Özel</string>
@@ -181,4 +181,22 @@
     <string name="autoplay_off">Kapalı</string>
     <string name="offline">Çevrimdışı mod</string>
     <string name="offline_search">Arama için bağlantı gerekiyor</string>
+    <string name="backup_export">Dinleme verilerini dışa aktar</string>
+    <string name="backup_export_short">Favoriler, geçmiş ve çalma listeleri bir dosyaya</string>
+    <string name="backup_import">Dinleme verilerini içe aktar</string>
+    <string name="backup_import_short">Kaydedilmiş dosyayı buradakilere ekler</string>
+    <string name="backup_saved">Dinleme verileri kaydedildi</string>
+    <string name="backup_failed">Dosya kaydedilemedi</string>
+    <string name="backup_unreadable">Bu dosya bir Nota yedeği değil</string>
+    <string name="backup_restored">%1$d favori, geçmişe %2$d şarkı ve %3$d çalma listesi eklendi</string>
+    <string name="backup_missing_local">O telefondaki %d şarkı bu telefonda yok</string>
+    <string name="less_ai">Daha az yapay zeka</string>
+    <string name="less_ai_on">Açık: yapay zeka işareti taşıyan şarkılar öneri ve aramaya girmez</string>
+    <string name="less_ai_off">Kapalı</string>
+    <string name="pause_history">Dinleme ve arama geçmişini kaydetme</string>
+    <string name="pause_history_on">Açık: çalınanlar ve aramalar kaydedilmiyor</string>
+    <string name="pause_history_off">Kapalı</string>
+    <string name="pause_history_warning">Bunu açarsan dinlediğin müziklere göre öneri alamazsın. Çaldığın şarkılar ve aramaların kaydedilmez, ana sayfa ve sıradaki şarkı önerileri bunlardan öğrenmez.</string>
+    <string name="pause_history_confirm">Aç</string>
+    <string name="version">Sürüm %s</string>
 </resources>

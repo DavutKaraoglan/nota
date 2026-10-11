@@ -233,11 +233,15 @@ public class Recommender {
         Map<String, Float> affinity = artistAffinity(app, db);
         Set<String> recent = new HashSet<String>(db.recentKeys(20));
         Set<String> muted = Muted.keys(app);
+        boolean lessAi = LessAi.on(app);
         List<Candidate> ranked = new ArrayList<Candidate>(pool.values());
         // Dropped here rather than where they were gathered: a muted name is a claim about what
         // may be suggested, and this is the one place everything suggested passes through.
         for (Iterator<Candidate> it = ranked.iterator(); it.hasNext(); ) {
-            if (muted.contains(artistKey(it.next().track))) it.remove();
+            Track t = it.next().track;
+            if (muted.contains(artistKey(t)) || (lessAi && t.isRemote() && LessAi.looksAi(t))) {
+                it.remove();
+            }
         }
         for (Candidate c : ranked) {
             Float a = affinity.get(artistKey(c.track));

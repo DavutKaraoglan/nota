@@ -92,6 +92,7 @@ public class Playback implements MediaPlayer.OnCompletionListener,
     private boolean playWhenReady;
     private boolean resumeOnFocusGain;
     private int audioSessionId;
+    private int fxSession;
     /** Bumped on every open so a late stream URL cannot hijack a track the user skipped. */
     private int openGeneration;
     private long openedAt;
@@ -612,7 +613,18 @@ public class Playback implements MediaPlayer.OnCompletionListener,
         mp.setOnErrorListener(this);
         // Network streams stall if the CPU sleeps while the screen is off.
         mp.setWakeMode(app, PowerManager.PARTIAL_WAKE_LOCK);
+        if (fxSession <= 0) {
+            fxSession = ((AudioManager) app.getSystemService(Context.AUDIO_SERVICE))
+                    .generateAudioSessionId();
+        }
+        if (fxSession > 0) {
+            try {
+                mp.setAudioSessionId(fxSession);
+            } catch (Exception ignored) {
+            }
+        }
         audioSessionId = mp.getAudioSessionId();
+        Fx.get(app).attach(audioSessionId);
 
         try {
             mp.setDataSource(app, uri);
@@ -637,7 +649,6 @@ public class Playback implements MediaPlayer.OnCompletionListener,
             // the next launch, and the notes that explain it are already in the same file.
             CrashLog.exportPending(app);
         }
-        Fx.get(app).attach(audioSessionId);
         if (resumeFromMs > 0 && current() == resumeTrack) {
             try {
                 player.seekTo((int) resumeFromMs);
@@ -767,7 +778,7 @@ public class Playback implements MediaPlayer.OnCompletionListener,
 
     private void releasePlayer() {
         if (mp != null) {
-            Fx.get(app).release();
+            if (audioSessionId != fxSession) Fx.get(app).release();
             try {
                 mp.reset();
                 mp.release();

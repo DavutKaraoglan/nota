@@ -130,6 +130,8 @@ public class ArtistPage extends Page implements Playback.Listener {
 
     private void bindFollow(boolean following) {
         follow.setText(following ? R.string.following : R.string.follow);
+        follow.setBackgroundResource(following ? R.drawable.bg_button_on : R.drawable.bg_button);
+        follow.setTextColor(following ? 0xFF000000 : host.getColor(R.color.accent));
     }
 
     /** What the listener has spent on this artist, which only they can have earned. */

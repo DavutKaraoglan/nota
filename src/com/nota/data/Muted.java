@@ -48,4 +48,16 @@ public class Muted {
         Prefs.setString(c, KEY, sb.toString());
         return !removed;
     }
+
+    public static void addAll(Context c, List<String> artists) {
+        List<String> kept = all(c);
+        for (String artist : artists) {
+            boolean known = false;
+            for (String a : kept) if (a.equalsIgnoreCase(artist)) known = true;
+            if (!known) kept.add(artist);
+        }
+        StringBuilder sb = new StringBuilder();
+        for (String a : kept) sb.append(a).append('\n');
+        Prefs.setString(c, KEY, sb.toString());
+    }
 }

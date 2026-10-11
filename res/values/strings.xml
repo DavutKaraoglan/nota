@@ -127,7 +127,7 @@
 
     <!-- Settings -->
     <string name="theme">Theme</string>
-    <string name="theme_system">Follow system</string>
+    <string name="theme_system">System</string>
     <string name="theme_light">Light</string>
     <string name="theme_dark">Dark</string>
     <string name="language">Language</string>
@@ -139,7 +139,7 @@
     <string name="clear_history">Clear listening history</string>
     <string name="history_cleared">History cleared</string>
     <string name="about">About</string>
-    <string name="about_body">Nota is an offline music player that can also search the web for music. It has no accounts and no tracking.</string>
+    <string name="about_body">Nota is an offline music player that can also search the web for music.</string>
     <string name="nothing_playing">Nothing is playing</string>
     <string name="equalizer_preset">Preset</string>
     <string name="equalizer_custom">Custom</string>
@@ -183,4 +183,22 @@
     <string name="autoplay_off">Off</string>
     <string name="offline">Offline</string>
     <string name="offline_search">Searching needs a connection</string>
+    <string name="backup_export">Export listening data</string>
+    <string name="backup_export_short">Favorites, history and playlists to a file</string>
+    <string name="backup_import">Import listening data</string>
+    <string name="backup_import_short">Adds a saved file to what is already here</string>
+    <string name="backup_saved">Listening data saved</string>
+    <string name="backup_failed">Could not save the file</string>
+    <string name="backup_unreadable">This file is not a Nota backup</string>
+    <string name="backup_restored">Added %1$d favorites, %2$d songs to history and %3$d playlists</string>
+    <string name="backup_missing_local">%d songs from that phone are not on this one</string>
+    <string name="less_ai">Less AI</string>
+    <string name="less_ai_on">On: songs marked as AI made are left out of suggestions and search</string>
+    <string name="less_ai_off">Off</string>
+    <string name="pause_history">Don\'t save listening and search history</string>
+    <string name="pause_history_on">On: plays and searches are not recorded</string>
+    <string name="pause_history_off">Off</string>
+    <string name="pause_history_warning">If you turn this on, you won\'t get suggestions based on the music you listen to. Songs you play and what you search for are not recorded, so the home page and the next song suggestions stop learning from them.</string>
+    <string name="pause_history_confirm">Turn on</string>
+    <string name="version">Version %s</string>
 </resources>

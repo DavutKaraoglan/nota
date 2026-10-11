@@ -60,6 +60,7 @@ public class NowPlayingActivity extends Activity
     /** The controls sit on the blurred cover, so they are tinted for that backdrop, not the theme. */
     private static final int CONTROL_ON = 0xFFFFFFFF;
     private static final int CONTROL_IDLE = 0xB3FFFFFF;
+    private static final int REPEAT_IDLE = 0x59FFFFFF;
 
     private static final int HEART_EVERY_MS = 110;
 
@@ -73,6 +74,7 @@ public class NowPlayingActivity extends Activity
     private TextView title, subtitle, position, duration, lyricLine;
     private SeekBar seek;
     private ImageButton toggle, repeat, favorite, download;
+    private View repeatDot;
     private View downloadSlot, downloadBusy;
     private ListView lyricsList;
     private DragSheet sheet;
@@ -137,6 +139,7 @@ public class NowPlayingActivity extends Activity
         seek = (SeekBar) findViewById(R.id.seek);
         toggle = (ImageButton) findViewById(R.id.btn_toggle);
         repeat = (ImageButton) findViewById(R.id.btn_repeat);
+        repeatDot = findViewById(R.id.repeat_dot);
         favorite = (ImageButton) findViewById(R.id.btn_favorite);
         download = (ImageButton) findViewById(R.id.btn_download);
         downloadSlot = findViewById(R.id.download_slot);
@@ -282,6 +285,7 @@ public class NowPlayingActivity extends Activity
             public void onClick(View v) {
                 showingLyrics = !showingLyrics;
                 applyLyricsVisibility();
+                if (showingLyrics) jumpToLine();
             }
         };
         art.setOnClickListener(flipLyrics);
@@ -501,7 +505,8 @@ public class NowPlayingActivity extends Activity
         int mode = playback.repeatMode();
         repeat.setImageResource(mode == Playback.REPEAT_ONE
                 ? R.drawable.ic_repeat_one : R.drawable.ic_repeat);
-        repeat.setColorFilter(mode == Playback.REPEAT_OFF ? CONTROL_IDLE : CONTROL_ON);
+        repeat.setColorFilter(mode == Playback.REPEAT_OFF ? REPEAT_IDLE : CONTROL_ON);
+        repeatDot.setVisibility(mode == Playback.REPEAT_OFF ? View.INVISIBLE : View.VISIBLE);
         repeat.setContentDescription(getString(mode == Playback.REPEAT_OFF
                 ? R.string.repeat_off
                 : mode == Playback.REPEAT_ONE ? R.string.repeat_one : R.string.repeat_all));
@@ -577,6 +582,22 @@ public class NowPlayingActivity extends Activity
                         lyricLine.animate().alpha(1f).translationY(0f).setDuration(180).start();
                     }
                 }).start();
+    }
+
+    private void jumpToLine() {
+        if (lyrics == null || !lyrics.synced) return;
+        final int index = lyrics.indexAt(playback.position() + LYRIC_LEAD_MS, highlighted);
+        if (index != highlighted) {
+            highlighted = index;
+            lyricAdapter.notifyDataSetChanged();
+        }
+        if (index < 0) return;
+        lyricsList.setSelection(Math.max(0, index - 2));
+        lyricsList.post(new Runnable() {
+            public void run() {
+                lyricsList.setSelection(Math.max(0, index - 2));
+            }
+        });
     }
 
     private void applyLyricsVisibility() {

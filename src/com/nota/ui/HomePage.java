@@ -1,5 +1,8 @@
 package com.nota.ui;
 
+import android.animation.Animator;
+import android.animation.AnimatorListenerAdapter;
+import android.animation.ValueAnimator;
 import android.text.TextUtils;
 import android.view.LayoutInflater;
 import android.view.View;
@@ -14,6 +17,7 @@ import com.nota.data.ArtLoader;
 import com.nota.data.Connectivity;
 import com.nota.data.Db;
 import com.nota.data.Follows;
+import com.nota.data.LessAi;
 import com.nota.data.MediaLibrary;
 import com.nota.data.Muted;
 import com.nota.data.Recommender;
@@ -74,6 +78,7 @@ public class HomePage extends Page implements MediaLibrary.Listener, Playback.Li
     /** The Db revision the shelves on screen were built from. -1 until they exist at all. */
     private int builtAt = -1;
     private String playedFrom;
+    private boolean lessAiAt;
 
 
     @Override
@@ -114,7 +119,12 @@ public class HomePage extends Page implements MediaLibrary.Listener, Playback.Li
         // Rebuilding the shelves means a round of queries and a fresh set of views; coming back
         // from another tab without having played or favourited anything earns none of that.
         Db db = Db.get(host);
-        if (db.revision() != builtAt || !listenedTo(db).equals(playedFrom)) refresh();
+        if (LessAi.on(host) != lessAiAt) {
+            forgetAnswers();
+            refresh();
+        } else if (db.revision() != builtAt || !listenedTo(db).equals(playedFrom)) {
+            refresh();
+        }
         loadTint();
     }
 
@@ -133,6 +143,12 @@ public class HomePage extends Page implements MediaLibrary.Listener, Playback.Li
             if (forYou.isEmpty()) askedFor = null;
         }
         refresh();
+    }
+
+    private void forgetAnswers() {
+        moodShown = null;
+        freshFor = null;
+        askedFor = null;
     }
 
     public void onLibraryChanged() {
@@ -186,6 +202,7 @@ public class HomePage extends Page implements MediaLibrary.Listener, Playback.Li
         Db db = Db.get(host);
         builtAt = db.revision();
         playedFrom = listenedTo(db);
+        lessAiAt = LessAi.on(host);
 
         // Offline the catalogue half of this screen is a row of things a tap cannot open, so
         // the page falls back to what the phone is already holding.
@@ -248,6 +265,7 @@ public class HomePage extends Page implements MediaLibrary.Listener, Playback.Li
         View box = LayoutInflater.from(host).inflate(
                 R.layout.item_home_moods, sections, false);
         LinearLayout row = (LinearLayout) box.findViewById(R.id.mood_row);
+        if (!LessAi.on(host)) addLessAiChip(row);
         for (String name : host.getResources().getStringArray(R.array.mood_names)) {
             final String picked = name;
             TextView chip = (TextView) LayoutInflater.from(host).inflate(
@@ -263,6 +281,51 @@ public class HomePage extends Page implements MediaLibrary.Listener, Playback.Li
             row.addView(chip);
         }
         sections.addView(box);
+    }
+
+    private void addLessAiChip(final LinearLayout row) {
+        final TextView chip = (TextView) LayoutInflater.from(host).inflate(
+                R.layout.item_mood_chip, row, false);
+        chip.setText(R.string.less_ai);
+        chip.setOnClickListener(new View.OnClickListener() {
+            public void onClick(View v) {
+                chip.setOnClickListener(null);
+                chip.setSelected(true);
+                chip.setCompoundDrawablesRelativeWithIntrinsicBounds(R.drawable.ic_check, 0, 0, 0);
+                chip.setCompoundDrawablePadding(Ui.dp(host, 6));
+                chip.setCompoundDrawableTintList(chip.getTextColors());
+                LessAi.set(host, true);
+                slideAway(row, chip);
+            }
+        });
+        row.addView(chip);
+    }
+
+    private void slideAway(final LinearLayout row, final TextView chip) {
+        final ViewGroup.MarginLayoutParams lp = (ViewGroup.MarginLayoutParams) chip.getLayoutParams();
+        final int width = chip.getWidth();
+        final int margin = lp.getMarginEnd();
+        ValueAnimator collapse = ValueAnimator.ofFloat(1f, 0f);
+        collapse.setDuration(260);
+        collapse.setStartDelay(420);
+        collapse.addUpdateListener(new ValueAnimator.AnimatorUpdateListener() {
+            public void onAnimationUpdate(ValueAnimator a) {
+                float f = (Float) a.getAnimatedValue();
+                chip.setTranslationX(-(width + margin) * (1f - f));
+                chip.setAlpha(f);
+                lp.width = Math.round(width * f);
+                lp.setMarginEnd(Math.round(margin * f));
+                chip.setLayoutParams(lp);
+            }
+        });
+        collapse.addListener(new AnimatorListenerAdapter() {
+            public void onAnimationEnd(Animator a) {
+                row.removeView(chip);
+                forgetAnswers();
+                refresh();
+            }
+        });
+        collapse.start();
     }
 
     /**
@@ -497,6 +560,7 @@ public class HomePage extends Page implements MediaLibrary.Listener, Playback.Li
             ImageView art = (ImageView) card.findViewById(R.id.art);
             Ui.round(art, radius);
             loader.bind(art, seed, artPx, R.drawable.ic_playlist, Ui.dp(host, 34));
+            Collage.bindMix(art, seed, artPx);
             ((TextView) card.findViewById(R.id.title)).setText(name);
             ((TextView) card.findViewById(R.id.subtitle)).setText(seed.title);
             card.setOnClickListener(new View.OnClickListener() {

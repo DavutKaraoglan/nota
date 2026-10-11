@@ -14,6 +14,7 @@ import android.widget.TextView;
 import com.nota.R;
 import com.nota.data.ArtLoader;
 import com.nota.data.Connectivity;
+import com.nota.data.HistoryPause;
 import com.nota.data.Prefs;
 import com.nota.data.Signals;
 import com.nota.data.YtApi;
@@ -156,6 +157,7 @@ public class DiscoverPage extends Page implements Playback.Listener {
 
     /** Same term twice is one entry, moved back to the front. */
     private void remember(String term, String artUrl) {
+        if (HistoryPause.on(host)) return;
         List<String[]> kept = new ArrayList<String[]>();
         kept.add(new String[]{term, artUrl == null ? "" : artUrl});
         for (String[] old : recent()) {
