@@ -1,0 +1,7 @@
+Your listening data can now move with you. Settings exports favorites, history, play counts, playlists and followed artists to a file, and imports one back on another phone.
+
+- A switch in Settings stops plays and searches from being recorded. Suggestions then stop learning from what you play.
+- "Less AI" leaves songs marked as AI made out of search, mixes and suggestions.
+- The equalizer holds steady across songs instead of being rebuilt at the start of each one.
+- Compilations show a collage of four covers, and lyrics open at the line being sung.
+- Repeat shows a dot when it is on, and Settings shows the version.
