@@ -3,7 +3,6 @@
 # Nota
 
 [![Release](https://img.shields.io/github/v/release/DavutKaraoglan/nota?style=flat-square&color=111111&labelColor=444444)](https://github.com/DavutKaraoglan/nota/releases/latest)
-[![Downloads](https://img.shields.io/github/downloads/DavutKaraoglan/nota/total?style=flat-square&color=111111&labelColor=444444)](https://github.com/DavutKaraoglan/nota/releases)
 [![Android](https://img.shields.io/badge/Android-7.0%2B-111111?style=flat-square&labelColor=444444)](AndroidManifest.xml)
 [![Licence](https://img.shields.io/github/license/DavutKaraoglan/nota?style=flat-square&color=111111&labelColor=444444)](LICENSE)
 
