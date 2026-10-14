@@ -1,0 +1,2 @@
+- Downloads can also be saved to Music/Nota by song name, so file managers and other players see them. Turn it on in Settings.
+- The notification no longer disappears when playback is paused.
