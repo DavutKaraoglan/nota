@@ -193,6 +193,9 @@
     <string name="less_ai">Daha az yapay zeka</string>
     <string name="less_ai_on">Açık: yapay zeka işareti taşıyan şarkılar öneri ve aramaya girmez</string>
     <string name="less_ai_off">Kapalı</string>
+    <string name="to_music">İndirilenleri Müzik\'e kaydet</string>
+    <string name="to_music_on">Açık: indirilenler şarkı adıyla Music/Nota klasörüne de kopyalanır</string>
+    <string name="to_music_off">Kapalı: indirilenler yalnız uygulamanın içinde durur</string>
     <string name="pause_history">Dinleme ve arama geçmişini kaydetme</string>
     <string name="pause_history_on">Açık: çalınanlar ve aramalar kaydedilmiyor</string>
     <string name="pause_history_off">Kapalı</string>

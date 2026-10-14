@@ -194,6 +194,7 @@ public class MediaLibrary {
                     // MediaStore reports disc-prefixed numbers as 1xx / 2xx.
                     if (t.trackNo > 1000) t.trackNo = t.trackNo % 1000;
 
+                    if (t.data != null && t.data.contains("/" + Downloads.MUSIC_PATH)) continue;
                     if (t.data != null) {
                         int slash = t.data.lastIndexOf('/');
                         t.folder = slash > 0 ? t.data.substring(0, slash) : "/";

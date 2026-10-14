@@ -1,10 +1,21 @@
 package com.nota.data;
 
+import android.content.ContentResolver;
+import android.content.ContentValues;
 import android.content.Context;
+import android.database.Cursor;
+import android.media.MediaScannerConnection;
+import android.net.Uri;
+import android.os.Build;
+import android.os.Environment;
 import android.os.Handler;
 import android.os.Looper;
+import android.provider.MediaStore;
+
+import com.nota.model.Track;
 
 import java.io.File;
+import java.io.FileInputStream;
 import java.io.FileOutputStream;
 import java.io.InputStream;
 import java.io.OutputStream;
@@ -12,6 +23,7 @@ import java.net.HttpURLConnection;
 import java.net.URL;
 import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.Collections;
 import java.util.Comparator;
 import java.util.HashSet;
 import java.util.List;
@@ -33,6 +45,9 @@ public class Downloads {
     private static final long MAX_BYTES = 24L * 1024 * 1024;
     /** How much is asked for at once, matching the proxy. */
     private static final int CHUNK_BYTES = 1024 * 1024;
+
+    public static final String KEY_TO_MUSIC = "downloads_to_music";
+    public static final String MUSIC_PATH = Environment.DIRECTORY_MUSIC + "/Nota/";
 
     public interface Listener {
         void onDownloadChanged(String videoId, boolean done);
@@ -77,6 +92,21 @@ public class Downloads {
     public boolean has(String videoId) {
         File f = file(videoId);
         return f.isFile() && f.length() > 0;
+    }
+
+    public boolean toMusic() {
+        return Prefs.getBool(app, KEY_TO_MUSIC, false);
+    }
+
+    public void setToMusic(boolean on) {
+        Prefs.setBool(app, KEY_TO_MUSIC, on);
+        if (!on) return;
+        workers.execute(new Runnable() {
+            public void run() {
+                String prefix = "o:" + YtApi.PREFIX;
+                for (String key : keptKeys()) copyToMusic(key.substring(prefix.length()));
+            }
+        });
     }
 
     public synchronized boolean running(String videoId) {
@@ -134,6 +164,7 @@ public class Downloads {
                 boolean ok = false;
                 try {
                     ok = fetch(videoId);
+                    if (ok && toMusic()) copyToMusic(videoId);
                 } catch (Exception e) {
                     CrashLog.note(app, "download failed: " + e);
                 }
@@ -191,6 +222,96 @@ public class Downloads {
         } finally {
             part.delete();
         }
+    }
+
+    private void copyToMusic(String videoId) {
+        File source = file(videoId);
+        if (!source.isFile()) return;
+        String id = YtApi.PREFIX + videoId;
+        String name = musicName(Db.get(app).online(Collections.singleton(id)).get(id), videoId);
+        try {
+            if (Build.VERSION.SDK_INT >= 29) copyToStore(source, name);
+            else copyToFolder(source, name);
+        } catch (Exception e) {
+            CrashLog.note(app, "music copy failed: " + e);
+        }
+    }
+
+    private void copyToStore(File source, String name) throws Exception {
+        ContentResolver cr = app.getContentResolver();
+        Uri collection = MediaStore.Audio.Media.getContentUri(MediaStore.VOLUME_EXTERNAL_PRIMARY);
+        Cursor c = cr.query(collection, new String[]{MediaStore.Audio.Media._ID},
+                MediaStore.Audio.Media.RELATIVE_PATH + "=? AND "
+                        + MediaStore.Audio.Media.DISPLAY_NAME + "=?",
+                new String[]{MUSIC_PATH, name}, null);
+        if (c != null) {
+            try {
+                if (c.moveToFirst()) return;
+            } finally {
+                c.close();
+            }
+        }
+        ContentValues v = new ContentValues();
+        v.put(MediaStore.Audio.Media.DISPLAY_NAME, name);
+        v.put(MediaStore.Audio.Media.MIME_TYPE, "audio/mp4");
+        v.put(MediaStore.Audio.Media.RELATIVE_PATH, MUSIC_PATH);
+        v.put(MediaStore.Audio.Media.IS_PENDING, 1);
+        Uri item = cr.insert(collection, v);
+        if (item == null) return;
+        boolean done = false;
+        try {
+            OutputStream to = cr.openOutputStream(item);
+            if (to == null) return;
+            copy(source, to);
+            done = true;
+        } finally {
+            if (!done) cr.delete(item, null, null);
+        }
+        v.clear();
+        v.put(MediaStore.Audio.Media.IS_PENDING, 0);
+        cr.update(item, v, null, null);
+    }
+
+    private void copyToFolder(File source, String name) throws Exception {
+        File folder = new File(Environment.getExternalStorageDirectory(), MUSIC_PATH);
+        if (!folder.isDirectory() && !folder.mkdirs()) return;
+        File target = new File(folder, name);
+        if (target.exists()) return;
+        File part = new File(folder, name + ".part");
+        copy(source, new FileOutputStream(part));
+        if (part.renameTo(target)) {
+            MediaScannerConnection.scanFile(app, new String[]{target.getPath()}, null, null);
+        } else {
+            part.delete();
+        }
+    }
+
+    private static void copy(File source, OutputStream to) throws Exception {
+        try {
+            InputStream from = new FileInputStream(source);
+            try {
+                byte[] buffer = new byte[65536];
+                int n;
+                while ((n = from.read(buffer)) > 0) to.write(buffer, 0, n);
+            } finally {
+                from.close();
+            }
+        } finally {
+            to.close();
+        }
+    }
+
+    static String musicName(Track t, String videoId) {
+        String name = "";
+        if (t != null && t.title != null) {
+            name = t.artist == null || t.artist.trim().isEmpty() || t.title.contains(t.artist)
+                    ? t.title : t.artist + " - " + t.title;
+        }
+        name = name.replaceAll("[\\\\/:*?\"<>|\\p{Cntrl}]", "_").replaceAll("\\s+", " ").trim();
+        while (name.startsWith(".")) name = name.substring(1);
+        if (name.length() > 120) name = name.substring(0, 120).trim();
+        if (name.isEmpty()) name = videoId;
+        return name + ".m4a";
     }
 
     /**

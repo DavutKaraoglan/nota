@@ -39,6 +39,7 @@ import com.nota.data.Connectivity;
 import com.nota.data.CrashLog;
 import com.nota.data.DataSaver;
 import com.nota.data.Db;
+import com.nota.data.Downloads;
 import com.nota.data.MediaLibrary;
 import com.nota.data.YtApi;
 import com.nota.model.Track;
@@ -69,6 +70,7 @@ public class MainActivity extends Activity {
     private static final int REQ_NOTIFY = 2;
     private static final int REQ_EXPORT = 3;
     private static final int REQ_IMPORT = 4;
+    private static final int REQ_WRITE = 5;
 
     private FrameLayout content;
     private View tint;
@@ -680,8 +682,20 @@ public class MainActivity extends Activity {
         requestPermissions(new String[]{Manifest.permission.POST_NOTIFICATIONS}, REQ_NOTIFY);
     }
 
+    void askMusicWrite() {
+        if (Build.VERSION.SDK_INT >= 29 || checkSelfPermission(
+                Manifest.permission.WRITE_EXTERNAL_STORAGE) == PackageManager.PERMISSION_GRANTED) {
+            return;
+        }
+        requestPermissions(new String[]{Manifest.permission.WRITE_EXTERNAL_STORAGE}, REQ_WRITE);
+    }
+
     @Override
     public void onRequestPermissionsResult(int code, String[] perms, int[] results) {
+        if (code == REQ_WRITE && results.length > 0
+                && results[0] == PackageManager.PERMISSION_GRANTED) {
+            Downloads.get(this).setToMusic(true);
+        }
         if (code == REQ_AUDIO) {
             if (results.length > 0 && results[0] == PackageManager.PERMISSION_GRANTED) {
                 MediaLibrary.get().load(this, true);

@@ -14,6 +14,7 @@ import android.widget.Toast;
 import com.nota.R;
 import com.nota.data.DataSaver;
 import com.nota.data.Db;
+import com.nota.data.Downloads;
 import com.nota.data.HistoryPause;
 import com.nota.data.LessAi;
 import com.nota.data.MediaLibrary;
@@ -38,7 +39,7 @@ public class SettingsPage extends Page {
     private static final int ROW_THEME = 0, ROW_LANGUAGE = 1, ROW_SLEEP = 2, ROW_EQ = 3,
             ROW_AUTOPLAY = 4, ROW_DATA = 5, ROW_TASTE = 6, ROW_CLEAR = 7, ROW_ABOUT = 8,
             ROW_EXPORT = 9, ROW_IMPORT = 10, ROW_LESS_AI = 11,
-            ROW_PAUSE = 12;
+            ROW_PAUSE = 12, ROW_TO_MUSIC = 13;
 
     private static final int[] SLEEP_MINUTES = {0, 15, 30, 45, 60, 90};
 
@@ -57,6 +58,7 @@ public class SettingsPage extends Page {
         rows.add(ROW_AUTOPLAY);
         rows.add(ROW_LESS_AI);
         rows.add(ROW_DATA);
+        rows.add(ROW_TO_MUSIC);
         rows.add(ROW_TASTE);
         rows.add(ROW_PAUSE);
         rows.add(ROW_EXPORT);
@@ -116,6 +118,9 @@ public class SettingsPage extends Page {
             case ROW_PAUSE:
                 togglePause();
                 break;
+            case ROW_TO_MUSIC:
+                toggleToMusic();
+                break;
             case ROW_EXPORT:
                 host.exportBackup();
                 break;
@@ -143,6 +148,14 @@ public class SettingsPage extends Page {
         } catch (Exception e) {
             return "?";
         }
+    }
+
+    private void toggleToMusic() {
+        Downloads downloads = Downloads.get(host);
+        boolean on = !downloads.toMusic();
+        downloads.setToMusic(on);
+        if (on) host.askMusicWrite();
+        adapter.notifyDataSetChanged();
     }
 
     private void togglePause() {
@@ -296,6 +309,9 @@ public class SettingsPage extends Page {
             case ROW_PAUSE:
                 return host.getString(HistoryPause.on(host) ? R.string.pause_history_on
                         : R.string.pause_history_off);
+            case ROW_TO_MUSIC:
+                return host.getString(Downloads.get(host).toMusic() ? R.string.to_music_on
+                        : R.string.to_music_off);
             case ROW_EXPORT:
                 return host.getString(R.string.backup_export_short);
             case ROW_IMPORT:
@@ -329,6 +345,8 @@ public class SettingsPage extends Page {
                 return R.string.less_ai;
             case ROW_PAUSE:
                 return R.string.pause_history;
+            case ROW_TO_MUSIC:
+                return R.string.to_music;
             case ROW_EXPORT:
                 return R.string.backup_export;
             case ROW_IMPORT:

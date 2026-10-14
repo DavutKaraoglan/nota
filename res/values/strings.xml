@@ -195,6 +195,9 @@
     <string name="less_ai">Less AI</string>
     <string name="less_ai_on">On: songs marked as AI made are left out of suggestions and search</string>
     <string name="less_ai_off">Off</string>
+    <string name="to_music">Save downloads to Music</string>
+    <string name="to_music_on">On: downloads are also copied to Music/Nota by song name</string>
+    <string name="to_music_off">Off: downloads stay inside the app</string>
     <string name="pause_history">Don\'t save listening and search history</string>
     <string name="pause_history_on">On: plays and searches are not recorded</string>
     <string name="pause_history_off">Off</string>
