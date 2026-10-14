@@ -39,6 +39,9 @@ public class PlayerService extends Service implements Playback.Listener {
     private static final String CHANNEL = "playback";
     private static final int NOTIF_ID = 1;
     private static final int ART_PX = 512;
+    private static final long PAUSED_FOREGROUND_MS = 10 * 60 * 1000;
+
+    private static volatile PlayerService running;
 
     private Playback playback;
     private MediaSession session;
@@ -46,8 +49,24 @@ public class PlayerService extends Service implements Playback.Listener {
     private final Handler main = new Handler(Looper.getMainLooper());
     private String artKeyInNotification;
     private boolean destroyed;
+    private boolean foreground;
+    private final Runnable leaveForeground = new Runnable() {
+        public void run() {
+            stopForeground(false);
+            foreground = false;
+        }
+    };
 
     public static void start(Context c) {
+        final PlayerService s = running;
+        if (s != null && !s.destroyed) {
+            s.main.post(new Runnable() {
+                public void run() {
+                    s.enterForeground();
+                }
+            });
+            return;
+        }
         Intent i = new Intent(c, PlayerService.class);
         try {
             if (Build.VERSION.SDK_INT >= 26) c.startForegroundService(i);
@@ -79,6 +98,19 @@ public class PlayerService extends Service implements Playback.Listener {
         createSession();
         playback.addListener(this);
         startForeground(NOTIF_ID, buildNotification(null));
+        foreground = true;
+        running = this;
+    }
+
+    private void enterForeground() {
+        main.removeCallbacks(leaveForeground);
+        if (foreground || destroyed) return;
+        try {
+            startForeground(NOTIF_ID, buildNotification(null));
+            foreground = true;
+        } catch (Exception e) {
+            CrashLog.note(this, "player service promote refused: " + e);
+        }
     }
 
     private void createChannel() {
@@ -149,7 +181,9 @@ public class PlayerService extends Service implements Playback.Listener {
             stopSelf();
             return START_NOT_STICKY;
         }
+        main.removeCallbacks(leaveForeground);
         startForeground(NOTIF_ID, buildNotification(null));
+        foreground = true;
         // Nothing survives a process restart: Playback would come back with an empty queue.
         return START_NOT_STICKY;
     }
@@ -162,6 +196,7 @@ public class PlayerService extends Service implements Playback.Listener {
     @Override
     public void onDestroy() {
         destroyed = true;
+        if (running == this) running = null;
         main.removeCallbacksAndMessages(null);
         playback.removeListener(this);
         if (session != null) {
@@ -183,9 +218,12 @@ public class PlayerService extends Service implements Playback.Listener {
     public void onStateChanged(boolean playing, boolean buffering) {
         updateSessionState();
         pushNotification();
-        // Staying foreground while buffering: leaving early makes a later resume throw
-        // ForegroundServiceStartNotAllowedException because the app is no longer visible.
-        if (!playing && !buffering) stopForeground(false);
+        if (playing || buffering) {
+            enterForeground();
+        } else {
+            main.removeCallbacks(leaveForeground);
+            main.postDelayed(leaveForeground, PAUSED_FOREGROUND_MS);
+        }
     }
 
     public void onQueueChanged() {
