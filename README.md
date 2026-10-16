@@ -19,7 +19,7 @@ Music player for Android. It plays the songs on your phone and can fetch the one
 - **Songs that are not on the phone.** Search YouTube in the app and play the result.
 - **Lyrics** that scroll with the song.
 - **Light on data.** What it fetches once is kept, so screens open again without the network.
-- **No account, no ads.** Under one megabyte.
+- **Small.** The APK is under 300 KB.
 
 Your listening history stays on the phone. Searches, covers and lyrics are fetched from YouTube, MusicBrainz, Wikidata and LRCLIB, which see what you searched for and your IP address.
 
