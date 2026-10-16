@@ -111,4 +111,5 @@ on every skip.
 
 ## Licence
 
-MIT, see [LICENSE](LICENSE).
+Copyright (C) 2026 Nota contributors. GPL-3.0-or-later, see [LICENSE](LICENSE).
+Releases up to 1.3.2 were published under the MIT licence.
